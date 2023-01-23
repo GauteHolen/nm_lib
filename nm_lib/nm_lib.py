@@ -33,6 +33,13 @@ def deriv_dnw(xx, hh, **kwargs):
         grid point is ill (or missing) calculated. 
     """
 
+    dh = hh[1:-1]-hh[0:-2]
+    #dx = xx[1:-1]-xx[0:-2]
+    dx = xx[1]-xx[0]
+    dhdx = dh/dx
+    return dhdx
+
+
 
 def order_conv(hh, hh2, hh4, **kwargs):
     """
