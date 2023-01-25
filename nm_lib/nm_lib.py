@@ -33,11 +33,10 @@ def deriv_dnw(xx, hh, **kwargs):
         grid point is ill (or missing) calculated. 
     """
 
-    dh = hh[1:-1]-hh[0:-2]
-    #dx = xx[1:-1]-xx[0:-2]
-    dx = xx[1]-xx[0]
-    dhdx = dh/dx
-    return dhdx
+    #Not actually the downwind but the centered
+    dh = hh[1:]-hh[0:-1]
+    dx = xx[1:]-xx[0:-1]
+    return dh/dx
 
 
 
@@ -58,7 +57,18 @@ def order_conv(hh, hh2, hh4, **kwargs):
     `array` 
         The order of convergence.  
     """
-   
+
+    
+    frac = np.ones(hh.shape) #init
+    for i in range(len(hh)):
+        ##hh is half step
+        ##hh2 is quarter step (+1 for half)
+        #hh4 is eighth step   (+3 for half)
+        frac[i] = (hh4[i*4+3]-hh2[i*2+1])/(hh2[i*2+1]-hh[i])
+
+    m = np.log(frac)/np.log(2)
+
+    return m
 
 def deriv_4tho(xx, hh, **kwargs): 
     """
@@ -77,6 +87,26 @@ def deriv_4tho(xx, hh, **kwargs):
         The centered 4th order derivative of hh respect to xx. 
         Last and first two grid points are ill calculated. 
     """
+    dx = xx[1]-xx[0]
+    #setting up the array
+    dhdx = np.zeros(xx.shape, dtype=type(xx[0]))
+
+    #First 2 elements
+    dhdx[0]= 8*hh[1] - hh[2] 
+    dhdx[1]= -8*hh[0] + 8*hh[2] - hh[3]
+
+    #Bulk ov elements
+    dhdx[2:-2] = hh[0:-4] - 8*hh[1:-3] + 8*hh[3:-1] - hh[4:]
+
+    #Last 2 elements
+    dhdx[-2] = hh[-4] - 8*hh[-3] + 8*hh[-1]
+    dhdx[-1] = hh[-3] - 8*hh[-2]
+    #Divide by 12*dx
+    dhdx = dhdx /(12*dx)
+
+    return dhdx
+
+
    
 
 def step_adv_burgers(xx, hh, a, cfl_cut = 0.98, 
