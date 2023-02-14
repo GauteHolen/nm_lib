@@ -1,10 +1,24 @@
+import importlib
 import numpy as np
 import nm_lib as nm
+import matplotlib.pyplot as plt
 
  
-def test_deriv_1sto(ddx,a, plot=False):
+def test_deriv_upw():
+    ddx = nm.deriv_upw
+    a = -1
+    plot=False
+    for i in range(10):
+        deriv_1sto(ddx,a,plot=False)
 
-    
+def test_deriv_dnw():
+    ddx = nm.deriv_dnw
+    a = -1
+    plot=False
+    for i in range(10):
+        deriv_1sto(ddx,a,plot=False)
+
+def deriv_1sto(ddx,a,plot=False):
     #Random initial values
     x0 = -2.6
     xf = 2.6
@@ -13,7 +27,7 @@ def test_deriv_1sto(ddx,a, plot=False):
     Nt = 10**np.random.randint(1,4)
     #print(nump,Nt)
 
-    print(f"Testing ddx = {ddx} | Nt = {Nt}, nump = {nump}")
+    print(f"Testing ddx = {str(ddx)} | Nt = {Nt}, nump = {nump}")
 
     #Functions for analytical solution
     def u_x_t0(xx):
@@ -69,12 +83,9 @@ def test_deriv_1sto(ddx,a, plot=False):
         plt.xlabel("Timestep")
         plt.ylabel("error/dx")
     
+    print(max_err)
+    
     for fit, err in zip(func,max_err):
-        assert err > fit
+        assert fit > err
 
 
-for i in range(10):
-    test_deriv_1sto(ddx = nm.deriv_upw, a = -1, plot = False  )
-
-for i in range(10):
-    test_deriv_1sto(ddx = nm.deriv_dnw, a = -1, plot = False  )
