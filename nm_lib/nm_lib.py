@@ -8,12 +8,117 @@ Created on Fri Jul 02 10:25:17 2021
 """
 
 # import builtin modules
+from cProfile import label
 import os
+from matplotlib.animation import FuncAnimation
+from IPython.display import HTML
 
 # import external public "common" modules
 import numpy as np
 import matplotlib.pyplot as plt 
+import warnings
 
+def animMult(uts,xx,lbls, styles, t,n_frames=100, log_time = False):
+    """
+    animate ut(xx) in time with a limited number of timesteps
+
+    Option for log spaced becuase more than about 100 timesteps animated becomes very slow...
+    
+    Parameters
+    ----------
+    ut : `array [array]` 
+        Array of each array of points u(x) in time
+    xx : `array` 
+        spacial axis
+
+
+    n_frames : `int` 
+        Number of frames in the animation
+    log_time : `boolean`
+        if true the timestep scales logarithmic and not linearly
+
+    Returns
+    ------- 
+    `HTML`
+        HTML animation object
+    """
+    def init():
+        for ut, lbl, style in zip(uts,lbls,styles):
+            axes.plot(xx,ut[0], label = lbl, linestyle = style)
+        plt.legend()
+
+    def animate(i):
+        axes.clear()
+        for ut, lbl, style in zip(uts,lbls,styles):
+            axes.plot(xx,ut[i], label = lbl, linestyle = style)
+        axes.set_title('t=%.2f'%t[i])
+        plt.legend()
+
+    Nt = uts[0].shape[0]
+
+    if log_time:
+        frames = np.zeros(n_frames, dtype=np.int64)
+        #First some linearly spaced frames
+        lin_frames = int(0.20*n_frames)
+        frames[0:lin_frames] = np.linspace(0,lin_frames-1,lin_frames, dtype=np.int64)
+        #Log spaced frames
+        frames[lin_frames:] = np.geomspace(lin_frames,Nt-1,num=n_frames-lin_frames,dtype=np.int64)[:]
+    else:
+        frames = np.linspace(1,Nt-1,num=n_frames, dtype=np.int64)
+
+    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
+    anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
+    return HTML(anim.to_jshtml())
+
+
+
+def anim(ut,xx,t,n_frames=100, log_time = False):
+    """
+    animate ut(xx) in time with a limited number of timesteps
+
+    Option for log spaced becuase more than about 100 timesteps animated becomes very slow...
+    
+    Parameters
+    ----------
+    ut : `array [array]` 
+        Array of each array of points u(x) in time
+    xx : `array` 
+        spacial axis
+
+
+    n_frames : `int` 
+        Number of frames in the animation
+    log_time : `boolean`
+        if true the timestep scales logarithmic and not linearly
+
+    Returns
+    ------- 
+    `HTML`
+        HTML animation object
+    """
+    def init(): 
+        axes.plot(xx,ut[0])
+
+    def animate(i):
+        axes.clear()
+        axes.plot(xx,ut[i])
+        axes.set_title('t=%.2f'%t[i])
+
+    Nt = ut.shape[0]
+
+    if log_time:
+        frames = np.zeros(n_frames, dtype=np.int64)
+        #First some linearly spaced frames
+        lin_frames = int(0.20*n_frames)
+        frames[0:lin_frames] = np.linspace(0,lin_frames-1,lin_frames, dtype=np.int64)
+        #Log spaced frames
+        frames[lin_frames:] = np.geomspace(lin_frames,Nt-1,num=n_frames-lin_frames,dtype=np.int64)[:]
+    else:
+        frames = np.linspace(1,Nt-1,num=n_frames, dtype=np.int64)
+
+    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
+    anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
+    return HTML(anim.to_jshtml())
 
 def deriv_dnw(xx, hh, **kwargs):
     """
@@ -32,10 +137,12 @@ def deriv_dnw(xx, hh, **kwargs):
         The downwind 2nd order derivative of hh respect to xx. Last 
         grid point is ill (or missing) calculated. 
     """
-
-    #Not actually the downwind but the centered
-    dh = hh[1:]-hh[0:-1]
-    dx = xx[1:]-xx[0:-1]
+    dx = np.empty(xx.shape)
+    dh = np.empty(xx.shape)
+    dh[:-1] = hh[1:]-hh[0:-1]
+    dx[:-1] = xx[1:]-xx[0:-1]
+    dh[-1] = dh[-2]
+    dx[-1] = dx[-2]
     return dh/dx
 
 
@@ -61,12 +168,10 @@ def order_conv(hh, hh2, hh4, **kwargs):
     
     frac = np.ones(hh.shape) #init
     for i in range(len(hh)):
-        ##hh is half step
-        ##hh2 is quarter step (+1 for half)
-        #hh4 is eighth step   (+3 for half)
-        frac[i] = (hh4[i*4+3]-hh2[i*2+1])/(hh2[i*2+1]-hh[i])
+        frac[i] = (hh4[i*4]-hh2[i*2])/(hh2[i*2]-hh[i])
 
-    m = np.log(frac)/np.log(2)
+    #Absolute value to prevent runtime error of log of negative numbers
+    m = np.ma.log(frac)/np.log(2)
 
     return m
 
@@ -95,7 +200,7 @@ def deriv_4tho(xx, hh, **kwargs):
     dhdx[0]= 8*hh[1] - hh[2] 
     dhdx[1]= -8*hh[0] + 8*hh[2] - hh[3]
 
-    #Bulk ov elements
+    #Bulk of elements
     dhdx[2:-2] = hh[0:-4] - 8*hh[1:-3] + 8*hh[3:-1] - hh[4:]
 
     #Last 2 elements
@@ -140,6 +245,13 @@ def step_adv_burgers(xx, hh, a, cfl_cut = 0.98,
         Time interval.
         Right hand side of (u^{n+1}-u^{n})/dt = from burgers eq, i.e., x \frac{\partial u}{\partial x} 
     """    
+    u_next = np.zeros(xx.shape,dtype=type(xx[0]))
+
+    dt = cfl_cut * cfl_adv_burger(a,xx)
+    dudx = ddx(xx,hh)
+    u_next =hh -a*dudx*dt
+ 
+    return u_next
 
 
 def cfl_adv_burger(a,x): 
@@ -159,11 +271,15 @@ def cfl_adv_burger(a,x):
     `float`
         min(dx/|a|)
     """
+    #Array of dx
+    dx = x[1:]-x[0:-1]
+
+    return np.min(dx/np.abs(a))
 
 
 def evolv_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[0,1], **kwargs):
+        bnd_type='wrap', bnd_limits=[0,1], keep_centered = False, **kwargs):
     r"""
     Advance nt time-steps in time the burger eq for a being a a fix constant or array.
     Requires
@@ -190,6 +306,11 @@ def evolv_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98,
         Array of two integer elements. The number of pixels that
         will need to be updated with the boundary information. 
         By default [0,1].
+    keep_centered : `int` or `False`
+        If int the program will keep the curve from drifting by
+        applying padding with boundary conditions before and 
+        after the differentiation and do interpolation to correct
+        for drift prop to dx*dt
 
     Returns
     ------- 
@@ -199,6 +320,50 @@ def evolv_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98,
         Spatial and time evolution of u^n_j for n = (0,nt), and where j represents
         all the elements of the domain. 
     """
+    dt = cfl_cut * cfl_adv_burger(a,xx)
+    dx = np.mean([x2-x1 for x2,x1 in zip(xx[1:],xx[0:-1])])
+    tt = np.linspace(0,(nt+1)*dt, nt)
+    x_len = xx.shape[0]
+
+    if keep_centered is not False and type(keep_centered) is int:
+        xx_cent = xx[:]+dx*dt*keep_centered*-1
+
+    uunt = np.zeros((nt,x_len))
+    uunt[0] = hh
+    u = hh
+    #u = np.pad(u,bnd_limits,bnd_type)
+    for i in range(1,len(tt)):
+        if keep_centered is not False and type(keep_centered) is int:
+            #Drift due to dnw method
+            u_pad = np.pad(u,[x+2 for x in bnd_limits],bnd_type)
+            x_pad = np.pad(xx,[x+2 for x in bnd_limits],'reflect', reflect_type='odd')
+            u_step = step_adv_burgers(x_pad,u_pad,a,ddx=ddx,fl_cut=cfl_cut)
+            
+            if ddx == deriv_upw:
+                u_next = u_step[3+bnd_limits[0]:-1-bnd_limits[1]]
+                
+            elif ddx == deriv_dnw:
+                #u_next = u_step[1+bnd_limits[0]:-3-bnd_limits[1]]
+                u_next = u_step[1:-4]
+            else:
+                u_next = u_step[2:-3] #centered
+                
+
+            #Drift in space proportional to dx*dt per timestep
+            u_next = np.interp(xx_cent,xx,u_next)
+
+        else:
+            u_next = step_adv_burgers(xx,u,a,ddx=ddx,cfl_cut=cfl_cut)
+            if bnd_limits[1] == 0:
+                u_next = np.pad(u_next[bnd_limits[0]:],bnd_limits,bnd_type)
+            else:
+                u_next = np.pad(u_next[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+        #u_next[0] = u_next[-1]       
+        uunt[i] = u_next
+        u = u_next
+    #print(len(tt), dt, x_len, dx)
+    return tt, uunt
+
 
 
 def deriv_upw(xx, hh, **kwargs):
@@ -218,6 +383,15 @@ def deriv_upw(xx, hh, **kwargs):
         The upwind 2nd order derivative of hh respect to xx. First 
         grid point is ill calculated. 
     """
+
+    dx = np.empty(xx.shape)
+    dh = np.empty(xx.shape)
+    dh[1:] = hh[1:]-hh[0:-1]
+    dx[1:] = xx[1:]-xx[0:-1]
+    dh[0] = dh[1]
+    dx[0] = dx[1]
+    return dh/dx
+
     
 
 def deriv_cent(xx, hh, **kwargs):
@@ -237,6 +411,16 @@ def deriv_cent(xx, hh, **kwargs):
         The centered 2nd order derivative of hh respect to xx. First 
         and last grid points are ill calculated. 
     """
+
+    dhdx = np.zeros(xx.shape, dtype=type(xx[0]))
+
+    #First and last terms
+    dhdx[0] = (hh[1]-hh[0])/(xx[1]-xx[0])
+    dhdx[-1] = (hh[-1]-hh[-2])/(xx[-1]-xx[-2])
+
+    dhdx[1:-1] = (hh[0:-2]-hh[2:]) / (xx[0:-2]-xx[2:])
+    
+    return dhdx
 
 
 def evolv_uadv_burgers(xx, hh, nt, cfl_cut = 0.98, 
