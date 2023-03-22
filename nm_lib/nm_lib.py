@@ -10,6 +10,7 @@ Created on Fri Jul 02 10:25:17 2021
 # import builtin modules
 from cProfile import label
 import os
+from xxlimited import Xxo
 from matplotlib.animation import FuncAnimation
 from IPython.display import HTML
 
@@ -17,6 +18,8 @@ from IPython.display import HTML
 import numpy as np
 import matplotlib.pyplot as plt 
 import warnings
+
+from pandas import array
 
 def animMult(uts,xx,lbls, styles, t,n_frames=100, log_time = False):
     """
@@ -68,6 +71,7 @@ def animMult(uts,xx,lbls, styles, t,n_frames=100, log_time = False):
 
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
     anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
+    plt.close()
     return HTML(anim.to_jshtml())
 
 
@@ -118,9 +122,10 @@ def anim(ut,xx,t,n_frames=100, log_time = False):
 
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
     anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
+    plt.close()
     return HTML(anim.to_jshtml())
 
-def deriv_dnw(xx, hh, **kwargs):
+def deriv_dnw(xx, hh, dtype = np.float64, **kwargs):
     """
     Returns the downwind 2nd order derivative of hh array respect to xx array. 
 
@@ -137,8 +142,8 @@ def deriv_dnw(xx, hh, **kwargs):
         The downwind 2nd order derivative of hh respect to xx. Last 
         grid point is ill (or missing) calculated. 
     """
-    dx = np.empty(xx.shape)
-    dh = np.empty(xx.shape)
+    dx = np.empty(xx.shape, dtype = dtype)
+    dh = np.empty(xx.shape, dtype = dtype)
     dh[:-1] = hh[1:]-hh[0:-1]
     dx[:-1] = xx[1:]-xx[0:-1]
     dh[-1] = dh[-2]
@@ -273,13 +278,16 @@ def cfl_adv_burger(a,x):
     """
     #Array of dx
     dx = x[1:]-x[0:-1]
-
-    return np.min(dx/np.abs(a))
+    if isinstance(a, np.ndarray):
+        maxa = np.amax(np.abs(a))
+        return np.amin(dx/maxa)
+    else:
+        return np.amin(dx/(np.abs(a)))
 
 
 def evolv_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[0,1], keep_centered = False, **kwargs):
+        bnd_type='wrap', bnd_limits=[0,1], keep_centered = False,**kwargs):
     r"""
     Advance nt time-steps in time the burger eq for a being a a fix constant or array.
     Requires
@@ -337,7 +345,7 @@ def evolv_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98,
             #Drift due to dnw method
             u_pad = np.pad(u,[x+2 for x in bnd_limits],bnd_type)
             x_pad = np.pad(xx,[x+2 for x in bnd_limits],'reflect', reflect_type='odd')
-            u_step = step_adv_burgers(x_pad,u_pad,a,ddx=ddx,fl_cut=cfl_cut)
+            u_step = step_adv_burgers(x_pad,u_pad,a,ddx=ddx,cfl_cut=cfl_cut)
             
             if ddx == deriv_upw:
                 u_next = u_step[3+bnd_limits[0]:-1-bnd_limits[1]]
@@ -366,7 +374,7 @@ def evolv_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98,
 
 
 
-def deriv_upw(xx, hh, **kwargs):
+def deriv_upw(xx, hh, dtype = np.float64, **kwargs):
     r"""
     returns the upwind 2nd order derivative of hh respect to xx. 
 
@@ -384,8 +392,8 @@ def deriv_upw(xx, hh, **kwargs):
         grid point is ill calculated. 
     """
 
-    dx = np.empty(xx.shape)
-    dh = np.empty(xx.shape)
+    dx = np.empty(xx.shape, dtype = dtype)
+    dh = np.empty(xx.shape, dtype = dtype)
     dh[1:] = hh[1:]-hh[0:-1]
     dx[1:] = xx[1:]-xx[0:-1]
     dh[0] = dh[1]
@@ -425,7 +433,7 @@ def deriv_cent(xx, hh, **kwargs):
 
 def evolv_uadv_burgers(xx, hh, nt, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[0,1], **kwargs):
+        bnd_type='wrap', diff = False, bnd_limits=[0,1], **kwargs):
     r"""
     Advance nt time-steps in time the burger eq for a being u.
 
@@ -461,10 +469,101 @@ def evolv_uadv_burgers(xx, hh, nt, cfl_cut = 0.98,
         all the elements of the domain. 
     """
 
+    
+    #dx = np.mean([x2-x1 for x2,x1 in zip(xx[1:],xx[0:-1])])
+    x_len = xx.shape[0]
+    tt = np.zeros(x_len)
 
-def evolv_Lax_uadv_burgers(xx, hh, nt, cfl_cut = 0.98, 
+    uunt = np.zeros((nt,x_len))
+    uunt[0] = hh
+    u = hh
+    #u = np.pad(u,bnd_limits,bnd_type)
+    for i in range(nt):
+        
+        if diff:
+            dt = cfl_diff_burger(u,xx) * cfl_cut
+            step = step_diff_burgers(xx,u,u)
+            u_next = u + dt*step
+        else:
+            dt = cfl_cut * cfl_adv_burger(u,xx)
+            step = step_uadv_burgers(xx,u,ddx=ddx,cfl_cut=cfl_cut)
+            u_next = u - dt*step
+        if bnd_limits[1] == 0:
+            u_next = np.pad(u_next[bnd_limits[0]:],bnd_limits,bnd_type)
+        else:
+            u_next = np.pad(u_next[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+        #u_next[0] = u_next[-1]       
+        uunt[i] = u_next
+        u = u_next
+        if i > 0:
+            tt[i] = tt[i-1] + dt
+    #print(len(tt), dt, x_len, dx)
+    return tt, uunt
+
+def step_Rie_adv_burgers(xx, hh, cfl_cut = 0.98, 
+                    ddx = lambda x,y: deriv_dnw(x, y), **kwargs): 
+    r"""
+    Right hand side of Burger's eq. where a can be a constant or a function that 
+    depends on xx. 
+
+    Requires 
+    ---------- 
+    cfl_adv_burger function which computes np.min(dx/a)
+
+    Parameters
+    ----------
+    xx : `array`
+        Spatial axis. 
+    hh : `array`
+        Function that depends on xx.
+    a : `float` or `array`
+        Either constant, or array which multiply the right hand side of the Burger's eq.
+    cfl_cut : `float`
+        Constant value to limit dt from cfl_adv_burger. 
+        By default clf_cut=0.98. 
+    ddx : `lambda function`
+        Allows to select the type of spatial derivative. 
+        By default lambda x,y: deriv_dnw(x, y)
+
+    Returns
+    -------
+    `array` 
+        Time interval.
+        Right hand side of (u^{n+1}-u^{n})/dt = from burgers eq, i.e., x \frac{\partial u}{\partial x} 
+    """    
+    
+    uL = hh
+    uR = np.roll(hh,1)
+    v_a = np.array([max(u,um1) for u,um1 in zip(hh,np.roll(hh,-1))])
+    #v_a = get_v_a(hh)
+    flux = flux_rusanov(uL,uR, v_a)
+
+    
+    dt = cfl_cut * cfl_adv_burger(v_a, xx)
+    u_next = hh - dt*(flux - np.roll(flux,1))
+    u_next = np.pad(u_next[1:-1], [1, 1], "wrap")
+ 
+    return dt, u_next
+
+def flux_rusanov(uL,uR, v_a):
+    flux_L = uL * uL * 0.5
+    flux_R = uR * uR * 0.5
+    flux = (flux_L + flux_R) * 0.5 - 0.5 * v_a * (uR - uL)
+    return flux
+
+def get_v_a(hh):
+    #arr1 = np.abs(hh)
+    #arr2 = np.abs(np.roll(hh,-1)) 
+    arr1 = hh
+    arr2 = np.roll(hh,-1)
+    s= np.max([arr1[:],arr2[:]])
+    print(s)
+    return s
+
+
+def evolv_Rie_uadv_burgers(xx, hh, nt, tf=None, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[0,1], **kwargs):
+        bnd_type='wrap', bnd_limits=[1,1], **kwargs):
     r"""
     Advance nt time-steps in time the burger eq for a being u using the Lax method.
 
@@ -499,6 +598,101 @@ def evolv_Lax_uadv_burgers(xx, hh, nt, cfl_cut = 0.98,
         Spatial and time evolution of u^n_j for n = (0,nt), and where j represents
         all the elements of the domain. 
     """
+    print("Riemann solver")
+    
+    x_len = xx.shape[0]
+
+    uunt = np.zeros((nt,x_len))
+    tt = np.zeros(nt)
+
+    uunt[0] = hh
+
+
+    for i in range(nt-1):
+        dt, step = step_Rie_adv_burgers(xx,uunt[i])
+        uunt[i+1] = step
+        tt[i+1] = tt[i] + dt
+        if tf and tt[i]>tf:
+            print(f"exceeded final time {tf:.3f} at {tt[i+1]:.3f}")
+            uunt = uunt[0:i+1]
+            tt = tt[0:i+1]
+            break
+
+    return tt,uunt
+
+
+def evolv_Lax_uadv_burgers(xx, hh, nt,v, cfl_cut = 0.98, 
+        ddx = lambda x,y: deriv_dnw(x, y), 
+        bnd_type='wrap', bnd_limits=[1,1], **kwargs):
+    r"""
+    Advance nt time-steps in time the burger eq for a being u using the Lax method.
+
+    Requires
+    -------- 
+    step_uadv_burgers
+
+    Parameters
+    ----------
+    xx : `array`
+        Spatial axis. 
+    hh : `array`
+        Function that depends on xx.
+    cfl_cut : `array`
+        Constant value to limit dt from cfl_adv_burger. 
+        By default 0.98
+    ddx : `array`
+        Lambda function allows to change the space derivative function.
+        By derault  lambda x,y: deriv_dnw(x, y)
+    bnd_type : `string`
+        It allows to select the type of boundaries 
+    bnd_limits : `list(int)`
+        List of two integer elements. The number of pixels that
+        will need to be updated with the boundary information. 
+        By default [0,1]
+
+    Returns
+    -------
+    t : `array`
+        Time 1D array
+    unnt : `array`
+        Spatial and time evolution of u^n_j for n = (0,nt), and where j represents
+        all the elements of the domain. 
+    """
+    print("lax method")
+
+
+    dx = xx[1]-xx[0] #Maybe not the best
+    dt = cfl_cut * dx
+    tt = np.linspace(0,(nt+1)*dt, nt)
+
+    uunt = np.zeros((nt,xx.shape[0]))
+    uunt[0] = hh
+
+    for i in range(1,nt):
+        
+        h_avg = np.zeros(hh.shape, dtype=type(hh[0]))
+        h_avg[1:-1] = hh[0:-2]+hh[2:]
+        h_avg[0] = hh[0]+hh[1]
+        h_avg[-1] = hh[-1]+hh[-2]
+        h_avg *= 0.5
+
+        h_avg2 = np.zeros(hh.shape, dtype=type(hh[0]))
+        h_avg2[1:-1] = -hh[0:-2]+hh[2:]
+        h_avg2[0] = -hh[0]+hh[1]
+        h_avg2[-1] = -hh[-1]+hh[-2]
+        h_avg2 *= 0.5
+
+        hh_new = h_avg -dt/dx * v*h_avg2
+        hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+        uunt[i] = hh_new      
+        hh = hh_new
+
+    return tt, uunt
+
+
+
+
+
 
 
 def evolv_Lax_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98, 
@@ -574,10 +768,16 @@ def step_uadv_burgers(xx, hh, cfl_cut = 0.98,
         time interval
     unnt : `array`
         right hand side of (u^{n+1}-u^{n})/dt = from burgers eq, i.e., x \frac{\partial u}{\partial x} 
-    """       
+    """
+
+    u_next = np.zeros(xx.shape,dtype=type(xx[0]))
+    dudx = ddx(xx,hh)
+    u_next =hh -hh*dudx
+ 
+    return u_next       
 
 
-def cfl_diff_burger(a,x): 
+def cfl_diff_burger(a,xx): 
     r"""
     Computes the dt_fact, i.e., Courant, Fredrich, and 
     Lewy condition for the diffusive term in the Burger's eq. 
@@ -594,6 +794,9 @@ def cfl_diff_burger(a,x):
     `float`
         min(dx/|a|)
     """
+    dx = xx[1] - xx[0]
+
+    return 0.5*dx*dx/np.amax(a)
 
 
 def ops_Lax_LL_Add(xx, hh, nt, a, b, cfl_cut = 0.98, 
@@ -817,7 +1020,15 @@ def step_diff_burgers(xx, hh, a, ddx = lambda x,y: deriv_cent(x, y), **kwargs):
     -------
     `array`
         Right hand side of (u^{n+1}-u^{n})/dt = from burgers eq, i.e., x \frac{\partial u}{\partial x} 
-    """    
+    """
+
+    dx = xx[1]-xx[0]
+
+    step = a/(dx*dx)*(np.roll(hh,1) - 2*hh + np.roll(hh,-1))
+    return step
+
+
+
 
 
 def NR_f(xx, un, uo, a, dt, **kwargs): 
@@ -843,6 +1054,14 @@ def NR_f(xx, un, uo, a, dt, **kwargs):
         function  u^{n+1}_{j}-u^{n}_{j} - a (u^{n+1}_{j+1} - 2 u^{n+1}_{j} -u^{n+1}_{j-1}) dt
     """    
 
+    #F = np.zeros(un.shape)
+    dx = xx[1] - xx[0]
+    alpha = a*dt / (dx*dx)
+
+    F = un - uo - alpha * (np.roll(un,1) - 2*un + np.roll(un,-1))
+    return F
+
+
 
 def jacobian(xx, un, a, dt, **kwargs): 
     r"""
@@ -863,7 +1082,33 @@ def jacobian(xx, un, a, dt, **kwargs):
     -------
     `array`
         Jacobian F_j'(u^{n+1}{k})
-    """    
+    """   
+
+    
+
+    dx = xx[1] - xx[0]
+    #dx = 1
+    lenx = un.shape[0]
+    J = np.zeros((lenx,lenx))
+    diag = 1+2*a*dt/(dx*dx)
+    seconddiag = -a*dt/(dx*dx)
+    maxshape = min(un.shape)
+    for i in range(0,maxshape):
+        J[i][i] = diag
+    
+    for i in range(1,maxshape-1):
+        J[i][i+1] = seconddiag
+        J[i][i-1] = seconddiag
+
+    J[0][1] = seconddiag
+    J[maxshape-1][maxshape-2] = seconddiag 
+
+    return J
+
+    
+
+
+    
 
 
 def Newton_Raphson(xx, hh, a, dt, nt, toll= 1e-5, ncount=2, 
@@ -977,6 +1222,12 @@ def NR_f_u(xx, un, uo, dt, **kwargs):
         function  u^{n+1}_{j}-u^{n}_{j} - a (u^{n+1}_{j+1} - 2 u^{n+1}_{j} -u^{n+1}_{j-1}) dt
     """    
 
+    dx = xx[1] - xx[0]
+    alpha = un*dt/(dx*dx)
+
+    F = un - uo - alpha * (np.roll(un,1) - 2*un + np.roll(un,-1))
+    return F
+
 
 def jacobian_u(xx, un, dt, **kwargs): 
     """
@@ -997,7 +1248,26 @@ def jacobian_u(xx, un, dt, **kwargs):
     -------
     `array`
         Jacobian F_j'(u^{n+1}{k})
-    """    
+    """
+
+    dx = xx[1] - xx[0]
+    lenx = un.shape[0]
+    J = np.zeros((lenx,lenx))
+    diag = 1+2*un*dt/(dx*dx)
+    seconddiagp = -np.roll(un,1)*dt/(dx*dx)
+    seconddiagm = -np.roll(un,-1)*dt/(dx*dx)
+    maxshape = min(un.shape)
+    for i in range(0,maxshape):
+        J[i][i] = diag[i]
+    
+    for i in range(1,maxshape-1):
+        J[i][i+1] = seconddiagp[i+1]
+        J[i][i-1] = seconddiagm[i-1]
+
+    J[0][1] = seconddiagp[1]
+    J[maxshape-1][maxshape-2] = seconddiagm[-1]
+
+    return J    
 
 
 def Newton_Raphson_u(xx, hh, dt, nt, toll= 1e-5, ncount=2, 
