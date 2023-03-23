@@ -21,7 +21,7 @@ import warnings
 
 from pandas import array
 
-def animMult(uts,xx,lbls, styles, t,n_frames=100, log_time = False):
+def animMult(uts,xx,lbls, styles, t,n_frames=100, nt = False, log_time = False):
     """
     animate ut(xx) in time with a limited number of timesteps
 
@@ -54,7 +54,10 @@ def animMult(uts,xx,lbls, styles, t,n_frames=100, log_time = False):
         axes.clear()
         for ut, lbl, style in zip(uts,lbls,styles):
             axes.plot(xx,ut[i], label = lbl, linestyle = style)
-        axes.set_title('t=%.2f'%t[i])
+        if nt:
+            axes.set_title(f'Timestep={i}')
+        else:
+            axes.set_title('t=%.2f'%t[i])
         plt.legend()
 
     Nt = uts[0].shape[0]
@@ -71,8 +74,9 @@ def animMult(uts,xx,lbls, styles, t,n_frames=100, log_time = False):
 
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
     anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
+    html = HTML(anim.to_jshtml())
     plt.close()
-    return HTML(anim.to_jshtml())
+    return html
 
 
 
@@ -256,7 +260,7 @@ def step_adv_burgers(xx, hh, a, cfl_cut = 0.98,
     dudx = ddx(xx,hh)
     u_next =hh -a*dudx*dt
  
-    return u_next
+    return dt, u_next
 
 
 def cfl_adv_burger(a,x): 
@@ -345,7 +349,7 @@ def evolv_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98,
             #Drift due to dnw method
             u_pad = np.pad(u,[x+2 for x in bnd_limits],bnd_type)
             x_pad = np.pad(xx,[x+2 for x in bnd_limits],'reflect', reflect_type='odd')
-            u_step = step_adv_burgers(x_pad,u_pad,a,ddx=ddx,cfl_cut=cfl_cut)
+            _,u_step = step_adv_burgers(x_pad,u_pad,a,ddx=ddx,cfl_cut=cfl_cut)
             
             if ddx == deriv_upw:
                 u_next = u_step[3+bnd_limits[0]:-1-bnd_limits[1]]
@@ -361,7 +365,7 @@ def evolv_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98,
             u_next = np.interp(xx_cent,xx,u_next)
 
         else:
-            u_next = step_adv_burgers(xx,u,a,ddx=ddx,cfl_cut=cfl_cut)
+            _,u_next = step_adv_burgers(xx,u,a,ddx=ddx,cfl_cut=cfl_cut)
             if bnd_limits[1] == 0:
                 u_next = np.pad(u_next[bnd_limits[0]:],bnd_limits,bnd_type)
             else:
@@ -692,8 +696,22 @@ def evolv_Lax_uadv_burgers(xx, hh, nt,v, cfl_cut = 0.98,
 
 
 
+def step_Lax_uadv_burgers(hh):
+    """Computes the averages of u along x for the lax method
+       hh_avg1 = 0.5 ( u^n_{j+1} + u^n_{j-1} )
+       hh_avg2 = 0.5 ( u^n_{j+1} - u^n_{j-1} )
 
+    Args:
+        hh (array): Depends on x
 
+    Returns:
+        _type_: _description_
+    """
+
+    h_avg1 = np.roll(hh,1) + np.roll(hh,-1)
+    h_avg2 = np.roll(hh,1) - np.roll(hh,-1)
+
+    return 0.5*h_avg1, 0.5*h_avg2
 
 def evolv_Lax_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
@@ -800,7 +818,7 @@ def cfl_diff_burger(a,xx):
 
 
 def ops_Lax_LL_Add(xx, hh, nt, a, b, cfl_cut = 0.98, 
-        ddx = lambda x,y: deriv_dnw(x, y), 
+        ddx = lambda x,y: deriv_cent(x, y), 
         bnd_type='wrap', bnd_limits=[0,1], **kwargs): 
     r"""
     Advance nt time-steps in time the burger eq for a being a and b 
@@ -847,6 +865,40 @@ def ops_Lax_LL_Add(xx, hh, nt, a, b, cfl_cut = 0.98,
         Spatial and time evolution of u^n_j for n = (0,nt), and where j represents
         all the elements of the domain. 
     """
+
+    print("add OS method")
+
+
+    tt = np.zeros(nt)
+    uunt = np.zeros((nt,xx.shape[0]))
+    uunt[0] = hh
+    dx = xx[1] - xx[0]
+
+    for i in range(1,nt):
+        
+        #dt1, rhs1 = step_adv_burgers(xx,hh,a,cfl_cut=cfl_cut, ddx=ddx)
+        #dt2, rhs2 = step_adv_burgers(xx,hh,b,cfl_cut=cfl_cut, ddx=ddx)
+        
+        dt1 = cfl_cut * cfl_adv_burger(a,xx)
+        dt2 = cfl_cut * cfl_adv_burger(b,xx)
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
+
+        dt = np.min([dt1,dt2])
+
+        hh1 = hh_avg1 - a*dt/dx * hh_avg2
+        hh2 = hh_avg1 - b*dt/dx * hh_avg2
+
+        hh_new = hh1 + hh2 - hh
+
+        hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+        uunt[i] = hh_new      
+        hh = hh_new
+        tt[i] = tt[i-1] + dt
+
+    return tt, uunt
+
+
 
 
 def ops_Lax_LL_Lie(xx, hh, nt, a, b, cfl_cut = 0.98, 
@@ -896,6 +948,36 @@ def ops_Lax_LL_Lie(xx, hh, nt, a, b, cfl_cut = 0.98,
         Spatial and time evolution of u^n_j for n = (0,nt), and where j represents
         all the elements of the domain. 
     """
+
+    print("Lie OS method")
+
+
+    tt = np.zeros(nt)
+    uunt = np.zeros((nt,xx.shape[0]))
+    uunt[0] = hh
+    dx = xx[1] - xx[0]
+
+    for i in range(1,nt):
+        
+        
+        dt1 = cfl_cut * cfl_adv_burger(a,xx)
+        
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
+        hh1 = hh_avg1 - a*dt1/dx * hh_avg2
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1)
+        dt2 = cfl_cut * cfl_adv_burger(b,xx)
+        hh2 = hh_avg1 - b*dt2/dx * hh_avg2
+
+        hh_new = hh2
+
+        hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+        uunt[i] = hh_new      
+        hh = hh_new
+        tt[i] = tt[i-1] + dt2
+
+    return tt, uunt
 
 
 def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98, 
@@ -947,6 +1029,46 @@ def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
         all the elements of the domain. 
     """
 
+    print("Strang OS method")
+
+
+    tt = np.zeros(nt)
+    uunt = np.zeros((nt,xx.shape[0]))
+    uunt[0] = hh
+    dx = xx[1] - xx[0]
+
+    dt1 = cfl_cut * cfl_adv_burger(a,xx)
+    dt2 = cfl_cut * cfl_adv_burger(b,xx)
+    dt = np.min([dt1,dt2])
+
+    for i in range(1,nt):
+        
+       #same subscripts as wikipedia Strang Splitting
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
+        hh1_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
+       
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_tilde) 
+        hh1_bar = hh_avg1 - b*dt/dx * hh_avg2             # full step
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_bar) 
+        hh1 = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1)
+        hh2_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
+       
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2_tilde) 
+        hh2_bar = hh_avg1 - b*dt/dx * hh_avg2             # full step
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2_bar) 
+        hh_new = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
+
+        hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+        uunt[i] = hh_new      
+        hh = hh_new
+        tt[i] = tt[i-1] + dt2
+
+    return tt, uunt
 
 
 def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98, 
