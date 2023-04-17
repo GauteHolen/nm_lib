@@ -21,7 +21,7 @@ import warnings
 
 from pandas import array
 
-def animMult(uts,xx,lbls, styles, t,n_frames=100, nt = False, log_time = False):
+def animMult(uts,xx,lbls, styles, t,n_frames=100, nt = False, log_time = False,ylim = None):
     """
     animate ut(xx) in time with a limited number of timesteps
 
@@ -48,12 +48,24 @@ def animMult(uts,xx,lbls, styles, t,n_frames=100, nt = False, log_time = False):
     def init():
         for ut, lbl, style in zip(uts,lbls,styles):
             axes.plot(xx,ut[0], label = lbl, linestyle = style)
+            if ylim:
+                axes.set_ylim(ylim)
         plt.legend()
 
     def animate(i):
         axes.clear()
         for ut, lbl, style in zip(uts,lbls,styles):
-            axes.plot(xx,ut[i], label = lbl, linestyle = style)
+            alpha = 1
+            
+            if ylim:
+                axes.set_ylim(ylim)
+                umax = np.abs(np.amax(ut[i]))
+                if umax > np.amax(ylim):
+                    alpha = min(1/np.sqrt(umax)+0.25,1)
+            
+                axes.plot(xx,ut[i], label = lbl, linestyle = style,alpha=alpha)
+            else:
+                axes.plot(xx,ut[i], label = lbl, linestyle = style,alpha=alpha)
         if nt:
             axes.set_title(f'Timestep={i}')
         else:
@@ -78,6 +90,66 @@ def animMult(uts,xx,lbls, styles, t,n_frames=100, nt = False, log_time = False):
     plt.close()
     return html
 
+def animMultX(uts,xxs,lbls, styles, t,n_frames=100,ylim = None, nt = False, log_time = False):
+    """
+    animate ut(xx) in time with a limited number of timesteps
+
+    Option for log spaced becuase more than about 100 timesteps animated becomes very slow...
+    
+    Parameters
+    ----------
+    ut : `array [array]` 
+        Array of each array of points u(x) in time
+    xx : `array` 
+        spacial axis
+
+
+    n_frames : `int` 
+        Number of frames in the animation
+    log_time : `boolean`
+        if true the timestep scales logarithmic and not linearly
+
+    Returns
+    ------- 
+    `HTML`
+        HTML animation object
+    """
+    def init():
+        for ut, xx, lbl, style in zip(uts,xxs,lbls,styles):
+            axes.plot(xx,ut[0], label = lbl, linestyle = style)
+            if ylim:
+                axes.set_ylim(ylim)
+        plt.legend()
+
+    def animate(i):
+        axes.clear()
+        for ut,xx, lbl, style in zip(uts,xxs,lbls,styles):
+            axes.plot(xx,ut[i], label = lbl, linestyle = style)
+            if ylim:
+                axes.set_ylim(ylim)
+        if nt:
+            axes.set_title(f'Timestep={i}')
+        else:
+            axes.set_title('t=%.2f'%t[i])
+        plt.legend()
+
+    Nt = uts[0].shape[0]
+
+    if log_time:
+        frames = np.zeros(n_frames, dtype=np.int64)
+        #First some linearly spaced frames
+        lin_frames = int(0.20*n_frames)
+        frames[0:lin_frames] = np.linspace(0,lin_frames-1,lin_frames, dtype=np.int64)
+        #Log spaced frames
+        frames[lin_frames:] = np.geomspace(lin_frames,Nt-1,num=n_frames-lin_frames,dtype=np.int64)[:]
+    else:
+        frames = np.linspace(1,Nt-1,num=n_frames, dtype=np.int64)
+
+    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
+    anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
+    html = HTML(anim.to_jshtml())
+    plt.close()
+    return html
 
 
 def anim(ut,xx,t,n_frames=100, log_time = False):
@@ -126,8 +198,9 @@ def anim(ut,xx,t,n_frames=100, log_time = False):
 
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
     anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
+    html = HTML(anim.to_jshtml())
     plt.close()
-    return HTML(anim.to_jshtml())
+    return html
 
 def deriv_dnw(xx, hh, dtype = np.float64, **kwargs):
     """
@@ -476,7 +549,7 @@ def evolv_uadv_burgers(xx, hh, nt, cfl_cut = 0.98,
     
     #dx = np.mean([x2-x1 for x2,x1 in zip(xx[1:],xx[0:-1])])
     x_len = xx.shape[0]
-    tt = np.zeros(x_len)
+    tt = np.zeros(nt)
 
     uunt = np.zeros((nt,x_len))
     uunt[0] = hh
@@ -491,7 +564,7 @@ def evolv_uadv_burgers(xx, hh, nt, cfl_cut = 0.98,
         else:
             dt = cfl_cut * cfl_adv_burger(u,xx)
             step = step_uadv_burgers(xx,u,ddx=ddx,cfl_cut=cfl_cut)
-            u_next = u - dt*step
+            u_next = u - u*dt*step
         if bnd_limits[1] == 0:
             u_next = np.pad(u_next[bnd_limits[0]:],bnd_limits,bnd_type)
         else:
@@ -625,7 +698,7 @@ def evolv_Rie_uadv_burgers(xx, hh, nt, tf=None, cfl_cut = 0.98,
     return tt,uunt
 
 
-def evolv_Lax_uadv_burgers(xx, hh, nt,v, cfl_cut = 0.98, 
+def evolv_Lax_uadv_burgers(xx, hh, nt, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
         bnd_type='wrap', bnd_limits=[1,1], **kwargs):
     r"""
@@ -686,7 +759,7 @@ def evolv_Lax_uadv_burgers(xx, hh, nt,v, cfl_cut = 0.98,
         h_avg2[-1] = -hh[-1]+hh[-2]
         h_avg2 *= 0.5
 
-        hh_new = h_avg -dt/dx * v*h_avg2
+        hh_new = h_avg -dt/dx * hh*h_avg2
         hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
         uunt[i] = hh_new      
         hh = hh_new
@@ -790,7 +863,7 @@ def step_uadv_burgers(xx, hh, cfl_cut = 0.98,
 
     u_next = np.zeros(xx.shape,dtype=type(xx[0]))
     dudx = ddx(xx,hh)
-    u_next =hh -hh*dudx
+    u_next =dudx
  
     return u_next       
 
@@ -958,16 +1031,18 @@ def ops_Lax_LL_Lie(xx, hh, nt, a, b, cfl_cut = 0.98,
     dx = xx[1] - xx[0]
 
     for i in range(1,nt):
+
         
         
         dt1 = cfl_cut * cfl_adv_burger(a,xx)
+        dt2 = cfl_cut * cfl_adv_burger(b,xx)
+        dt = np.min([dt1,dt2])
         
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
-        hh1 = hh_avg1 - a*dt1/dx * hh_avg2
+        hh1 = hh_avg1 - a*dt/dx * hh_avg2
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1)
-        dt2 = cfl_cut * cfl_adv_burger(b,xx)
         hh2 = hh_avg1 - b*dt2/dx * hh_avg2
 
         hh_new = hh2
@@ -975,7 +1050,8 @@ def ops_Lax_LL_Lie(xx, hh, nt, a, b, cfl_cut = 0.98,
         hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
         uunt[i] = hh_new      
         hh = hh_new
-        tt[i] = tt[i-1] + dt2
+        tt[i] = tt[i-1] + dt
+
 
     return tt, uunt
 
@@ -1037,13 +1113,15 @@ def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
     uunt[0] = hh
     dx = xx[1] - xx[0]
 
-    dt1 = cfl_cut * cfl_adv_burger(a,xx)
-    dt2 = cfl_cut * cfl_adv_burger(b,xx)
-    dt = np.min([dt1,dt2])
+    
 
     for i in range(1,nt):
         
        #same subscripts as wikipedia Strang Splitting
+
+        dt1 = cfl_cut * cfl_adv_burger(a,xx)
+        dt2 = cfl_cut * cfl_adv_burger(b,xx)
+        dt = np.min([dt1,dt2])
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
         hh1_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
