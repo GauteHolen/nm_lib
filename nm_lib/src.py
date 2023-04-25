@@ -9,15 +9,13 @@ Created on Fri Jul 02 10:25:17 2021
 
 # import builtin modules
 from cProfile import label
-import os
-from xxlimited import Xxo
 from matplotlib.animation import FuncAnimation
 from IPython.display import HTML
 
 # import external public "common" modules
 import numpy as np
 import matplotlib.pyplot as plt 
-import warnings
+
 
 from pandas import array
 
@@ -184,7 +182,7 @@ def anim(ut,xx,t,n_frames=100, log_time = False):
         axes.plot(xx,ut[i])
         axes.set_title('t=%.2f'%t[i])
 
-    Nt = ut.shape[0]
+    Nt = len(t)
 
     if log_time:
         frames = np.zeros(n_frames, dtype=np.int64)
@@ -510,7 +508,7 @@ def deriv_cent(xx, hh, **kwargs):
 
 def evolv_uadv_burgers(xx, hh, nt, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', diff = False, bnd_limits=[0,1], **kwargs):
+        bnd_type='wrap', diff = False, bnd_limits=[0,1], tf = None,**kwargs):
     r"""
     Advance nt time-steps in time the burger eq for a being u.
 
@@ -549,13 +547,16 @@ def evolv_uadv_burgers(xx, hh, nt, cfl_cut = 0.98,
     
     #dx = np.mean([x2-x1 for x2,x1 in zip(xx[1:],xx[0:-1])])
     x_len = xx.shape[0]
-    tt = np.zeros(nt)
+    tt = np.array([0])
 
     uunt = np.zeros((nt,x_len))
     uunt[0] = hh
     u = hh
+    if tf:
+        nt = int(1e30)
+    t = 0
     #u = np.pad(u,bnd_limits,bnd_type)
-    for i in range(nt):
+    for i in range(1,nt):
         
         if diff:
             dt = cfl_diff_burger(u,xx) * cfl_cut
@@ -572,8 +573,11 @@ def evolv_uadv_burgers(xx, hh, nt, cfl_cut = 0.98,
         #u_next[0] = u_next[-1]       
         uunt[i] = u_next
         u = u_next
-        if i > 0:
-            tt[i] = tt[i-1] + dt
+        t+=dt
+        tt = np.append(tt,t)
+        if tf:
+            if t > tf:
+                break
     #print(len(tt), dt, x_len, dx)
     return tt, uunt
 
@@ -700,7 +704,7 @@ def evolv_Rie_uadv_burgers(xx, hh, nt, tf=None, cfl_cut = 0.98,
 
 def evolv_Lax_uadv_burgers(xx, hh, nt, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[1,1], **kwargs):
+        bnd_type='wrap', bnd_limits=[1,1], tf=None, **kwargs):
     r"""
     Advance nt time-steps in time the burger eq for a being u using the Lax method.
 
@@ -739,14 +743,17 @@ def evolv_Lax_uadv_burgers(xx, hh, nt, cfl_cut = 0.98,
 
 
     dx = xx[1]-xx[0] #Maybe not the best
-    dt = cfl_cut * dx
-    tt = np.linspace(0,(nt+1)*dt, nt)
+
+    tt = np.array([0])
 
     uunt = np.zeros((nt,xx.shape[0]))
     uunt[0] = hh
 
+    if tf:
+        nt = int(1e30)
+    t = 0
     for i in range(1,nt):
-        
+        dt = cfl_cut * dx / np.amax(hh)
         h_avg = np.zeros(hh.shape, dtype=type(hh[0]))
         h_avg[1:-1] = hh[0:-2]+hh[2:]
         h_avg[0] = hh[0]+hh[1]
@@ -763,6 +770,11 @@ def evolv_Lax_uadv_burgers(xx, hh, nt, cfl_cut = 0.98,
         hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
         uunt[i] = hh_new      
         hh = hh_new
+        t+=dt
+        tt = np.append(tt,t)
+        if tf:
+            if t > tf:
+                break
 
     return tt, uunt
 

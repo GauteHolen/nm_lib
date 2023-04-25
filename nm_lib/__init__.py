@@ -1,3 +1,4 @@
-__all__ = ['nm_lib']
 
-from . import nm_lib
+
+from .src import *
+from .anim import *

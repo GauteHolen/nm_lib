@@ -8,4 +8,6 @@ Created on Thu Jun 30 04:12:21 2021.
 
 __all__ = ["nm_lib"]
 
+
 from . import nm_lib
+from importlib import reload as reload
