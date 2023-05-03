@@ -61,7 +61,7 @@ def animMultTsync(uts,xx,lbls, styles, ts,n_frames=100, nt = False, log_time = F
         if nt:
             axes.set_title(f'Timestep={i}')
         else:
-            axes.set_title('t=%.2f'%t_ref[i])
+            axes.set_title('t=%.5f'%t_ref[i])
         plt.legend()
 
     t_ref = ts[0]
@@ -90,6 +90,87 @@ def animMultTsync(uts,xx,lbls, styles, ts,n_frames=100, nt = False, log_time = F
     
     
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
+    anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
+    html = HTML(anim.to_jshtml())
+    plt.close()
+    return html
+
+
+
+
+def animMHDparams(et,ut,rhot,Pt,t,xx,n_frames=100, nt = False, log_time = False,ylim = None):
+    """
+    animate ut(xx) in time with a limited number of timesteps
+
+    Option for log spaced becuase more than about 100 timesteps animated becomes very slow...
+    
+    Parameters
+    ----------
+    ut : `array [array]` 
+        Array of each array of points u(x) in time
+    xx : `array` 
+        spacial axis
+
+
+    n_frames : `int` 
+        Number of frames in the animation
+    log_time : `boolean`
+        if true the timestep scales logarithmic and not linearly
+
+    Returns
+    ------- 
+    `HTML`
+        HTML animation object
+    """
+    def init():
+        axes[0][0].plot(xx,rhot[0])
+        axes[0][0].set_title('$\rho$')
+        axes[0][1].plot(xx,Pt[0])
+        axes[0][1].set_title('$P$')
+        axes[1][0].plot(xx,et[0])
+        axes[1][0].set_title('$e$')
+        axes[1][1].plot(xx,ut[0])
+        axes[1][1].set_title('$u$')
+        fig.suptitle('t=%.6f'%t_ref[0])
+
+    def animate(i):
+        for ax1 in axes:
+            for ax in ax1:
+                ax.clear()
+
+        axes[0][0].plot(xx,rhot[i])
+        axes[0][0].set_title(r'$\rho$')
+        axes[0][1].plot(xx,Pt[i])
+        axes[0][1].set_title('$P$')
+        axes[1][0].plot(xx,et[i])
+        axes[1][0].set_title('$e$')
+        axes[1][1].plot(xx,ut[i])
+        axes[1][1].set_title('$u$')
+        fig.suptitle('t=%.6f'%t_ref[i])
+        
+
+
+    t_ref = t
+    Nt = len(t)
+
+    
+    if n_frames > len(t_ref):
+        print("WARNING: number of frames exceeds number of timesteps")
+        n_frames = len(t_ref)
+
+    if log_time:
+        frames = np.zeros(n_frames, dtype=np.int64)
+        #First some linearly spaced frames
+        lin_frames = int(0.20*n_frames)
+        frames[0:lin_frames] = np.linspace(0,lin_frames-1,lin_frames, dtype=np.int64)
+        #Log spaced frames
+        frames[lin_frames:] = np.geomspace(lin_frames,Nt-1,num=n_frames-lin_frames,dtype=np.int64)[:]
+    else:
+        frames = np.linspace(0,Nt-1,num=n_frames, dtype=np.int64)
+
+    
+    
+    fig, axes = plt.subplots(2,2, figsize=(10, 5), tight_layout = True)
     anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
     html = HTML(anim.to_jshtml())
     plt.close()

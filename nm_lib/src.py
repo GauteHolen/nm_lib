@@ -192,7 +192,7 @@ def anim(ut,xx,t,n_frames=100, log_time = False):
         #Log spaced frames
         frames[lin_frames:] = np.geomspace(lin_frames,Nt-1,num=n_frames-lin_frames,dtype=np.int64)[:]
     else:
-        frames = np.linspace(1,Nt-1,num=n_frames, dtype=np.int64)
+        frames = np.linspace(0,Nt-1,num=n_frames, dtype=np.int64)
 
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
     anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
@@ -218,7 +218,7 @@ def deriv_dnw(xx, hh, dtype = np.float64, **kwargs):
         grid point is ill (or missing) calculated. 
     """
     dx = np.empty(xx.shape, dtype = dtype)
-    dh = np.empty(xx.shape, dtype = dtype)
+    dh = np.empty(hh.shape, dtype = dtype)
     dh[:-1] = hh[1:]-hh[0:-1]
     dx[:-1] = xx[1:]-xx[0:-1]
     dh[-1] = dh[-2]
@@ -255,7 +255,7 @@ def order_conv(hh, hh2, hh4, **kwargs):
 
     return m
 
-def deriv_4tho(xx, hh, **kwargs): 
+def deriv_4tho(xx, hh,**kwargs): 
     """
     Returns the 4th order derivative of hh respect to xx.
 
@@ -274,7 +274,7 @@ def deriv_4tho(xx, hh, **kwargs):
     """
     dx = xx[1]-xx[0]
     #setting up the array
-    dhdx = np.zeros(xx.shape, dtype=type(xx[0]))
+    dhdx = np.zeros(hh.shape, dtype=type(hh[0]))
 
     #First 2 elements
     dhdx[0]= 8*hh[1] - hh[2] 
@@ -495,7 +495,7 @@ def deriv_cent(xx, hh, **kwargs):
         and last grid points are ill calculated. 
     """
 
-    dhdx = np.zeros(xx.shape, dtype=type(xx[0]))
+    dhdx = np.zeros(hh.shape, dtype=type(xx[0]))
 
     #First and last terms
     dhdx[0] = (hh[1]-hh[0])/(xx[1]-xx[0])
