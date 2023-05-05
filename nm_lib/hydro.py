@@ -223,10 +223,14 @@ def step_density(xx,u,rho,dt, cD = 0, ddx = lambda x,y: deriv_cent(x, y)):
     dx = xx[1]-xx[0]
     #art_diff = dx**2 * step_diff_burgers(xx,rho, a=u)
     Diff = cD*rho*dx
+    deriv1 = ddx(xx,rho*u)
+    #deriv2 = ddx(xx,deriv1)
+    art_diff = -Diff*deriv1
 
-    rho_new = rho - dt*ddx(xx,rho*u) + dt*ddx(xx,Diff*ddx(xx,rho*u))
+    #rho_new = rho - dt*ddx(xx,rho*u) + dt*ddx(xx,Diff*ddx(xx,rho*u))
     #rho_new = rho - dt*ddx(xx,rho*u)
-
+    
+    rho_new = rho - dt*ddx(xx,(rho+art_diff)*u)
 
     return rho_new
 
@@ -246,9 +250,10 @@ def step_energy(xx,e,u,Pg,rho,dt, cq = 0, cL = 0, Q_col = 0, ddx = lambda x,y: d
     Returns:
         _type_: _description_
     """
+    #print(np.amax(np.abs(Q_col)))
    
     q = get_q_diffusive(xx,rho,u,cq,cL, ddx = ddx)
-    e_new = e - dt*ddx(xx,e*u) - dt*(Pg+q)*ddx(xx,u) + dt*Q_col
+    e_new = e - dt*ddx(xx,e*u) - dt*(Pg+q)*ddx(xx,u) - dt*Q_col
 
     return e_new
 

@@ -1,4 +1,4 @@
-from re import T
+from re import I, T
 import numpy as np
 from .hydro import step_density,step_momentum,step_pressure,step_energy,pad,unpad
 
@@ -165,10 +165,13 @@ class Multispecies:
     
     def get_col(self, sa, sb):
 
-        return sa.rho * self.get_col_freq(sa,sb)*(sa.u-sb.u)
+        return self.get_col_freq(sa,sb)*(sb.u-sa.u)
+        #return sa.rho * self.get_col_freq(sa,sb)*(sa.u-sb.u)
 
 
     def get_col_freq(self, sa,sb):
+
+        return 1e1
 
         T_ab = (sa.m*sa.T + sb.m*sb.T) / (sa.m+sb.m)
         m_ab = (sa.m*sb.m)/(sa.m+sb.m)
@@ -178,7 +181,7 @@ class Multispecies:
         mu_ab = np.zeros(len(sa.T))
         uth_ab = np.zeros(len(sa.T))
         for i in range(len(sa.T)):
-            if sa.T[i] > 1e-9 and sb.T[i] > 1e-9:
+            if sa.T[i] > 1e-20 and sb.T[i] > 1e-20:
                 mu_a[i] = sa.m/(self.k_b*sa.T[i])
                 mu_b[i] = sa.m/(self.k_b*sb.T[i])
                 mu_ab[i] = mu_a[i]*mu_b[i] / (mu_a[i]+mu_b[i])
@@ -191,8 +194,17 @@ class Multispecies:
 
 
     def get_sigma_T(self,T_ab):
-        return 1
-    
+        #print(T_ab)
+        print(np.amax(np.abs(T_ab)))
+        for i in range(len(T_ab)):
+
+            if T_ab[i] < 300:
+                T_ab[i] = 0
+            else:
+                T_ab[i] = 1e-20*(T_ab)
+        return T_ab*1e-20
+
+
     def get_Q_col(self, sa, sb):
         v_ab = self.get_col_freq(sa,sb)
         n_a = sa.rho/sa.m
