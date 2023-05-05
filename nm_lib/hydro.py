@@ -46,7 +46,7 @@ def evolve_hydro(xx,u0,rho0,nt,Pg0,gamma,cfl_cut = 0.98, bnd_limits = [2,2], bnd
         dt = dt*cfl_cut
         t+= dt
 
-        print(t,np.amax(c))
+        #print(t,np.amax(c))
 
 
         
@@ -85,7 +85,7 @@ def evolve_hydro(xx,u0,rho0,nt,Pg0,gamma,cfl_cut = 0.98, bnd_limits = [2,2], bnd
                         u[j] = -c[j]
 
             
-            e = step_energy(xx,e,u,Pg,dt,ddx=ddx)
+            e = step_energy(xx,e,u,Pg,rho,dt,ddx=ddx)
             
 
             
@@ -179,7 +179,7 @@ def step_Lax(xx,hh,dt,a=1):
 
 
 
-def step_momentum(xx,u,rho,Pg,dt,ddx = lambda x,y: deriv_cent(x, y), bnd_type='edge', bnd_limits = [2,2]):
+def step_momentum(xx,u,rho,Pg,dt,col = 0,cq = 0,cL = 0, ddx = lambda x,y: deriv_cent(x, y), bnd_type='edge', bnd_limits = [2,2]):
     """_summary_
 
     Args:
@@ -194,7 +194,11 @@ def step_momentum(xx,u,rho,Pg,dt,ddx = lambda x,y: deriv_cent(x, y), bnd_type='e
     Returns:
         _type_: _description_
     """
-    mom = u*rho - dt*ddx(xx,rho*u*u) - dt*ddx(xx,Pg)
+    #ddx = deriv_Lax_Wendroff
+    lmd = 1
+    q = get_q_diffusive(xx,rho,u,cq, cL)
+
+    mom = u*rho - dt*ddx(xx,rho*u*u) - dt*ddx(xx,Pg + q) + dt*col
 
 
 
@@ -202,7 +206,7 @@ def step_momentum(xx,u,rho,Pg,dt,ddx = lambda x,y: deriv_cent(x, y), bnd_type='e
 
 
 
-def step_density(xx,u,rho,dt, ddx = lambda x,y: deriv_cent(x, y)):
+def step_density(xx,u,rho,dt, cD = 0, ddx = lambda x,y: deriv_cent(x, y)):
     """_summary_
 
     Args:
@@ -214,16 +218,20 @@ def step_density(xx,u,rho,dt, ddx = lambda x,y: deriv_cent(x, y)):
         ddx (_type_, optional): _description_. Defaults to lambdax.
 
     Returns:
-        _type_: _description_
+        _type_: _description
     """
+    dx = xx[1]-xx[0]
+    #art_diff = dx**2 * step_diff_burgers(xx,rho, a=u)
+    Diff = cD*rho*dx
 
-    rho_new = rho - dt*ddx(xx,rho*u)
+    rho_new = rho - dt*ddx(xx,rho*u) + dt*ddx(xx,Diff*ddx(xx,rho*u))
+    #rho_new = rho - dt*ddx(xx,rho*u)
 
 
     return rho_new
 
 
-def step_energy(xx,e,u,Pg,dt, ddx = lambda x,y: deriv_cent(x, y)):
+def step_energy(xx,e,u,Pg,rho,dt, cq = 0, cL = 0, Q_col = 0, ddx = lambda x,y: deriv_cent(x, y)):
     """_summary_
 
     Args:
@@ -238,8 +246,38 @@ def step_energy(xx,e,u,Pg,dt, ddx = lambda x,y: deriv_cent(x, y)):
     Returns:
         _type_: _description_
     """
-
-    e_new = e - dt*ddx(xx,e*u) - dt*ddx(xx,Pg*u)
+   
+    q = get_q_diffusive(xx,rho,u,cq,cL, ddx = ddx)
+    e_new = e - dt*ddx(xx,e*u) - dt*(Pg+q)*ddx(xx,u) + dt*Q_col
 
     return e_new
+
+
+def get_q_diffusive(xx,rho,u,cq, cL,ddx = lambda x,y: deriv_cent(x, y)):
+
+    "https://arxiv.org/pdf/2202.11084.pdf"
+
+
+    dx = xx[1] - xx[0]
+    deriv1 = ddx(xx,u)
+    deriv2 = ddx(xx,deriv1)
+
+    #deriv2 = step_diff_burgers(xx,u,1)
+    q_RvN = cq*dx*dx*deriv2
+    qLQ = cL*dx*ddx(xx,u)
+    #for i in range(len(qLQ)):
+    #    qLQ[i] = min(0,qLQ[i])
+    return - rho * (q_RvN + qLQ)
+
+
+def pad(arrs, bnd_limits, bnd_type):
+    for i in range(len(arrs)):
+        arrs[i] = np.pad(arrs[i],bnd_limits,bnd_type)
+    return arrs
+
+def unpad(arrs, bnd_limits):
+    for i in range(len(arrs)):
+        arrs[i] = arrs[i][bnd_limits[0]:-bnd_limits[1]]
+    return arrs
+
 

@@ -1211,7 +1211,7 @@ def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
     """
 
 
-def step_diff_burgers(xx, hh, a, ddx = lambda x,y: deriv_cent(x, y), **kwargs): 
+def step_diff_burgers(xx, hh, a=1, ddx = lambda x,y: deriv_cent(x, y), **kwargs): 
     r"""
     Right hand side of the diffusive term of Burger's eq. where nu can be a constant or a function that 
     depends on xx. 
@@ -1480,6 +1480,16 @@ def jacobian_u(xx, un, dt, **kwargs):
     J[maxshape-1][maxshape-2] = seconddiagm[-1]
 
     return J    
+
+
+def deriv_Lax_Wendroff(xx,hh,dt,lmd = 1):
+
+    dx = xx[1] - xx[-1]
+
+    return -0.5*lmd*(np.roll(hh,1)/dx - np.roll(hh,-1)) + 0.5*dt*lmd*(np.roll(hh,1)-2*hh+np.roll(hh,-1))/(dx*dx)
+
+
+
 
 
 def Newton_Raphson_u(xx, hh, dt, nt, toll= 1e-5, ncount=2, 
