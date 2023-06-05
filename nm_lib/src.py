@@ -506,6 +506,31 @@ def deriv_cent(xx, hh, **kwargs):
     return dhdx
 
 
+def deriv_d2dx2(xx,hh):
+    r"""
+    returns the second centered 2nd derivative of hh respect to xx. 
+
+    Parameters
+    ---------- 
+    xx : `array`
+        Spatial axis. 
+    hh : `array`
+        Function that depends on xx. 
+
+    Returns
+    -------
+    `array`
+        The centered 2nd order derivative of hh respect to xx. First 
+        and last grid points are ill calculated. 
+    """
+
+    dx = xx[1] - xx[0]
+    d2dx2 = np.roll(hh,1) - 2*hh + np.roll(hh,-1)
+
+    return d2dx2/(dx*dx)
+
+
+
 def evolv_uadv_burgers(xx, hh, nt, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
         bnd_type='wrap', diff = False, bnd_limits=[0,1], tf = None,**kwargs):
@@ -798,9 +823,9 @@ def step_Lax_uadv_burgers(hh):
 
     return 0.5*h_avg1, 0.5*h_avg2
 
-def evolv_Lax_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98, 
+def evolv_Lax_adv_burgers(xx, hh, nt, a = 1, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[0,1], **kwargs):
+        bnd_type='wrap', bnd_limits=[1,1], tf=None, **kwargs):
     r"""
     Advance nt time-steps in time the burger eq for a being a a fix constant or array.
 
@@ -840,6 +865,42 @@ def evolv_Lax_adv_burgers(xx, hh, nt, a, cfl_cut = 0.98,
         Spatial and time evolution of u^n_j for n = (0,nt), and where j represents
         all the elements of the domain. 
     """
+
+    dx = xx[1]-xx[0] #Maybe not the best
+
+    tt = np.array([0])
+
+    uunt = np.zeros((nt,xx.shape[0]))
+    uunt[0] = hh
+
+    if tf:
+        nt = int(1e30)
+    t = 0
+    for i in range(1,nt):
+        dt = cfl_cut * dx / np.amax(hh)
+        h_avg = np.zeros(hh.shape, dtype=type(hh[0]))
+        h_avg[1:-1] = hh[0:-2]+hh[2:]
+        h_avg[0] = hh[0]+hh[1]
+        h_avg[-1] = hh[-1]+hh[-2]
+        h_avg *= 0.5
+
+        h_avg2 = np.zeros(hh.shape, dtype=type(hh[0]))
+        h_avg2[1:-1] = -hh[0:-2]+hh[2:]
+        h_avg2[0] = -hh[0]+hh[1]
+        h_avg2[-1] = -hh[-1]+hh[-2]
+        h_avg2 *= 0.5
+
+        hh_new = h_avg -dt/dx * a*h_avg2
+        hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+        uunt[i] = hh_new      
+        hh = hh_new
+        t+=dt
+        tt = np.append(tt,t)
+        if tf:
+            if t > tf:
+                break
+
+    return tt, uunt
 
 
 def step_uadv_burgers(xx, hh, cfl_cut = 0.98, 
@@ -1594,7 +1655,14 @@ def taui_sts(nu, niter, iiter):
         [(nu -1)cos(pi (2 iiter - 1) / 2 niter) + nu + 1]^{-1}
     """
 
-def evol_sts(xx, hh, nt,  a, cfl_cut = 0.45, 
+
+    return 1/((nu-1) * np.cos(np.pi * (2*iiter - 1) / (2*niter)) + nu + 1)
+
+
+
+
+
+def evolv_sts(xx, hh, nt,  a, cfl_cut = 0.45, 
         ddx = lambda x,y: deriv_cent(x, y), 
         bnd_type='wrap', bnd_limits=[0,1], nu=0.9, n_sts=10): 
     """
@@ -1638,6 +1706,40 @@ def evol_sts(xx, hh, nt,  a, cfl_cut = 0.45,
         Spatial and time evolution of u^n_j for n = (0,nt), and where j represents
         all the elements of the domain. 
     """
+
+
+    tt = np.zeros(nt)
+    unnt = np.zeros((nt,xx.shape[0]))
+    dx = xx[1] - xx[0]
+
+    #Initial condition
+    unnt[0,:] = hh.copy()
+    
+    #Cfl condition
+    dt_cfl = cfl_cut * cfl_diff_burger(a,xx)
+    t = 0
+    for i in range(1,nt):
+        dt = 0
+
+        for sts_iter in range(1,n_sts+1):
+            rhs = step_diff_burgers(xx,hh,a, ddx=ddx)
+            #substep
+            tau = taui_sts(nu,n_sts,sts_iter)
+            
+            hh = hh + rhs*tau*dt_cfl
+            dt += tau
+
+            #Boundary
+            hh = np.pad(hh[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+
+
+        unnt[i,:] = hh.copy()
+        t += dt*dt_cfl
+        tt[i] = t
+
+
+    return tt, unnt
+
 
 
 def hyman(xx, f, dth, a, fold=None, dtold=None,

@@ -192,8 +192,31 @@ def animMHDparams(et,ut,rhot,Pt,t,xx,n_frames=100, nt = False, log_time = False,
     plt.close()
     return html
 
+def plotColParams(names,uts,t):
 
-def animMultMHDparams(names,ets,uts,rhots,Pts,t,xx,n_frames=100, nt = False, log_time = False,ylim = None):
+    fig, axes = plt.subplots(figsize=(10, 8), tight_layout = True)
+
+    ut_mean = np.zeros(len(t))
+    for ut in uts:
+        ut_mean+= np.mean(ut,axis=1)
+    ut_mean /= len(uts)
+        
+
+    for ut, name in zip(uts,names):
+        ut_mean_diff = np.mean(ut,axis=1)
+        axes.plot(t,abs(ut_mean_diff-ut_mean),label=name)
+        
+    axes.set_yscale("log")
+    axes.set_ylabel(r"$|u - \bar{u}|$")
+    axes.set_xlabel("Time")
+    plt.legend()
+
+    plt.show()
+
+
+
+
+def animMultMHDparams(names,ets,uts,rhots,Pts,t,xx,n_frames=100, nt = False, log_time = False,ylim = None, figsize = (15,10)):
     """
     animate ut(xx) in time with a limited number of timesteps
 
@@ -230,13 +253,14 @@ def animMultMHDparams(names,ets,uts,rhots,Pts,t,xx,n_frames=100, nt = False, log
             if ylim:
                 axes[0][0].set_ylim(ylim)
                 axes[0][1].set_ylim(ylim)
-                axes[1][0].set_ylim(ylim)
+                #axes[1][0].set_ylim(ylim)
                 axes[1][1].set_ylim((-ylim[1],ylim[1]))
         handles, labels = axes[0][0].get_legend_handles_labels()
         fig.legend(handles, labels, loc='upper left')
         fig.suptitle('t=%.6f'%t_ref[0])
 
     def animate(i):
+        print(f"Animating frame {int(n_frames*i/frames[-1])} of {n_frames}", end = "\r")
         for ax1 in axes:
             for ax in ax1:
                 ax.clear()
@@ -244,7 +268,7 @@ def animMultMHDparams(names,ets,uts,rhots,Pts,t,xx,n_frames=100, nt = False, log
             if ylim:
                 axes[0][0].set_ylim(ylim)
                 axes[0][1].set_ylim(ylim)
-                axes[1][0].set_ylim(ylim)
+                #axes[1][0].set_ylim(ylim)
                 axes[1][1].set_ylim((-ylim[1],ylim[1]))
                 #if np.amax(np.abs(et[i])) > 5*ylim[1]:
                 """
@@ -296,8 +320,8 @@ def animMultMHDparams(names,ets,uts,rhots,Pts,t,xx,n_frames=100, nt = False, log
         frames = np.linspace(0,Nt-1,num=n_frames, dtype=np.int64)
 
     
-    
-    fig, axes = plt.subplots(2,2, figsize=(15, 10), tight_layout = True)
+    print("Animating CFD params \n")
+    fig, axes = plt.subplots(2,2, figsize=figsize, tight_layout = True)
     anim = FuncAnimation(fig, animate, interval=20, frames=frames, init_func=init)
     html = HTML(anim.to_jshtml())
     plt.close()

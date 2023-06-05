@@ -1,5 +1,6 @@
-from re import X
 from .src import *
+#import autograd.numpy as np
+
 
 def evolve_hydro(xx,u0,rho0,nt,Pg0,gamma,cfl_cut = 0.98, bnd_limits = [2,2], bnd_type = "symmetric", ddx="Lax"):
 
@@ -137,6 +138,26 @@ def step_pressure(Pg,e,rho,u,gamma):
 def get_dt(uts):
     return NotImplemented
 
+
+def step_euler_diffusive(rho,u,e,Pg,gamma,xx,dt,cq, cL, cD):
+    ddx = deriv_4tho
+    bnd_limits = [8,8]
+    bnd_type = "edge"
+    u = np.pad(u,bnd_limits,bnd_type)
+    rho = np.pad(rho,bnd_limits,bnd_type)
+    e = np.pad(e,bnd_limits,bnd_type)
+    Pg = np.pad(Pg,bnd_limits,bnd_type)
+    xx = np.pad(xx,bnd_limits,"reflect", reflect_type='odd')
+
+    u_new = step_momentum(xx,u,rho,Pg,dt,cq = cq, cL = cL, ddx = ddx)/rho
+    e_new = step_energy(xx,e,u_new,Pg,rho,dt,cq=cq,cL=cL, ddx = ddx)
+    rho_new = step_density(xx,u_new,rho,dt,cD=cD,ddx=ddx)
+    Pg_new = step_pressure(Pg,e_new,rho_new,u_new,gamma)
+    #[rho_n,u_n,e_n,Pg_n] = unpad([rho_new,u_new,e_new,Pg_new],bnd_limits)
+
+    return rho_new[bnd_limits[0]:-bnd_limits[1]],u_new[bnd_limits[0]:-bnd_limits[1]],e_new[bnd_limits[0]:-bnd_limits[1]],Pg_new[bnd_limits[0]:-bnd_limits[1]]
+
+
 def phi(r):
     min1 = min(r,(1+r)/2,1)
     min2 = min(2*r,(1+r)/2,2)
@@ -177,6 +198,33 @@ def step_Lax(xx,hh,dt,a=1):
     return hh_new[1:-1]
 
 
+def step_momentum_NS(xx,u,rho,Pg,dt,mu,col = 0,cq = 0,cL = 0, ddx = lambda x,y: deriv_cent(x, y), bnd_type='edge', bnd_limits = [2,2]):
+    """_summary_
+
+    Args:
+        xx (_type_): _description_
+        u (_type_): _description_
+        rho (_type_): _description_
+        Pg (_type_): _description_
+        dt (_type_): _description_
+        y (deriv_cent): _description_
+        ddx (_type_, optional): _description_. Defaults to lambdax.
+
+    Returns:
+        _type_: _description_
+    """
+    #ddx = deriv_Lax_Wendroff
+    lmd = 1
+    q = get_q_diffusive(xx,rho,u,cq, cL)
+    visc_NS = mu * 1.33 * ddx(xx,ddx(xx,u))
+    q=0
+    #print("col = ",col)
+    mom = u*rho - dt*ddx(xx,rho*u*u) - dt*ddx(xx,Pg + q) - dt*col + dt*visc_NS
+
+
+
+    return mom
+
 
 
 def step_momentum(xx,u,rho,Pg,dt,col = 0,cq = 0,cL = 0, ddx = lambda x,y: deriv_cent(x, y), bnd_type='edge', bnd_limits = [2,2]):
@@ -197,8 +245,9 @@ def step_momentum(xx,u,rho,Pg,dt,col = 0,cq = 0,cL = 0, ddx = lambda x,y: deriv_
     #ddx = deriv_Lax_Wendroff
     lmd = 1
     q = get_q_diffusive(xx,rho,u,cq, cL)
+    #print("col = ",col)
 
-    mom = u*rho - dt*ddx(xx,rho*u*u) - dt*ddx(xx,Pg + q) + dt*col
+    mom = u*rho - dt*ddx(xx,rho*u*u) - dt*ddx(xx,Pg + q) - dt*col
 
 
 
@@ -253,6 +302,7 @@ def step_energy(xx,e,u,Pg,rho,dt, cq = 0, cL = 0, Q_col = 0, ddx = lambda x,y: d
     #print(np.amax(np.abs(Q_col)))
    
     q = get_q_diffusive(xx,rho,u,cq,cL, ddx = ddx)
+    #print("Q_col",Q_col[0])
     e_new = e - dt*ddx(xx,e*u) - dt*(Pg+q)*ddx(xx,u) - dt*Q_col
 
     return e_new
