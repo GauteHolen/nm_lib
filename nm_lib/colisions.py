@@ -2,16 +2,46 @@ import os
 import numpy as np
 
 class CrossSection():
+    """Reads the crossection data for two species and stores in ndarray for fast implementation
+    """
 
     def __init__(self,dir,species1,species2):
+        """Reads and stores the data
+
+        Args:
+            dir (str): path to data
+            species1 (str): Name of species. Example "h" for hydrogen
+            species2 (str): Name of species. Example "he" for hydrogen
+        """
         self.name = f"{species1}-{species2}"
         self.temp,self.sigma = self.get_cs_tempsigma(dir,species1,species2)
 
     def get_sigma(self,T_ab):
+        """Get the crossection by interpolation on the crossection data 
+
+        Args:
+            T_ab (array): weighted temperature of the two species
+
+        Returns:
+            crossection (array): The crossection
+        """
         return np.interp(T_ab,self.temp,self.sigma)*2.80e-21 #m^2
 
 
     def find_cs_file(self,dir,species1,species2):
+        """Finds the correct crossection file for the two species in given directory
+
+        Args:
+            dir (str): path to data
+            species1 (str): Name of species. Example "h" for hydrogen
+            species2 (str): Name of species. Example "he" for hydrogen
+
+        Raises:
+            FileNotFoundError: If it can't find the file we can't run the simulation
+
+        Returns:
+            the_file (str): The correct filename
+        """
         files = os.listdir(dir)
 
         col_variations = files.copy()
@@ -32,6 +62,17 @@ class CrossSection():
         return the_file
 
     def read_cs_file(self,dir,species1,species2):
+        """Reads the cross section data for the two species and puts them in arrays
+
+        Args:
+            dir (str): path to data
+            species1 (str): Name of species. Example "h" for hydrogen
+            species2 (str): Name of species. Example "he" for hydrogen
+
+        Returns:
+            temp (array): The weighted temperature axis
+            sigma (array): The cross section axis
+        """
         filename = self.find_cs_file(dir,species1,species2)
         f = open(dir+"/"+filename, "r")
         f = f.read().split("\n")
@@ -53,6 +94,17 @@ class CrossSection():
         return temp,sigma
 
     def get_cs_tempsigma(self,dir,species1,species2):
+        """Calls func to read file and get temp and cross section arrays
+
+        Args:
+            dir (str): path to data
+            species1 (str): Name of species. Example "h" for hydrogen
+            species2 (str): Name of species. Example "he" for hydrogen
+
+        Returns:
+            temp (array): The weighted temperature axis
+            sigma (array): The cross section axis
+        """
         temp,sigma = self.read_cs_file(dir,species1,species2)
         return temp,sigma
 

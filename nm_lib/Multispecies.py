@@ -5,10 +5,30 @@ import numpy as np
 from .hydro import step_density,step_momentum,step_momentum_NS,step_pressure,step_energy,pad,unpad
 
 class Species:
+    """Species for fluid simulation. This object holds the parameters and data for the species.
+
+    Returns:
+        Species: The species object
+    """
 
     k_b = 1.380649e-23
 
     def __init__(self,name,u0,rho0,Pg0,gamma,m=1,cD=0,cq=0,cL=0, d=0, molecule = "h"):
+        """Set the initial conditions for the state of the species
+
+        Args:
+            name (str): The name of the species
+            u0 (array): Initial velocity
+            rho0 (array): Initial density
+            Pg0 (array): Initial gas pressure
+            gamma (float): specific heat ratio
+            m (int, optional): mass of one molecule in kg. Defaults to 1.
+            cD (int, optional): diffusive const. Defaults to 0.
+            cq (int, optional): diffusive const. Defaults to 0.
+            cL (int, optional): diffusive const. Defaults to 0.
+            d (int, optional): diameter in meters. Defaults to 0.
+            molecule (str, optional): Type of molecule for colisions. Defaults to "h".
+        """
         self.name = name
         self.m = m
         self.u = u0
@@ -32,6 +52,11 @@ class Species:
 
 
     def init_store_values(self,Nt):
+        """Initalize the arrays for storing values as the simulation moves forward in time
+
+        Args:
+            Nt (int): Timesteps
+        """
         self.us = np.zeros((Nt,self.lenx))
         self.rhos = np.zeros((Nt,self.lenx))
         self.Pgs = np.zeros((Nt,self.lenx))
@@ -43,6 +68,11 @@ class Species:
         self.es[0] = self.e
     
     def store_values(self,i):
+        """Stores the values for the new timestep in the appropriate arrays
+
+        Args:
+            i (int): the ith timestep
+        """
         self.us[i] = self.u
         self.rhos[i] = self.rho
         self.Pgs[i] = self.Pg
@@ -50,18 +80,40 @@ class Species:
         self.update_T()
 
     def get_values(self):
+        """Returns the values for the evolution in time of the parameters as well as a name
+
+        Returns:
+            list: [name, velocity, density, gas pressure, energy]
+        """
         return [self.name,self.us,self.rhos,self.Pgs,self.es]
 
     def update_T(self):
+        """Updates the temperature of the species with the new velocity
+        """
         self.T = np.abs(self.m*self.u**2)/(self.k_b*3)
         #print("T = ",self.T[0])
 
 
 class Multispecies:
+    """Holds the list of species and the solver methods for the simulation run
+
+    Must add species bfore running.
+
+    Returns:
+        Multispecies: The solver object
+    """
 
     k_b = 1.380649e-23
 
     def __init__(self,xx,ddx,bnd_limits,bnd_type):
+        """Initialize the multispecies solver object. 
+
+        Args:
+            xx (_type_): _description_
+            ddx (_type_): _description_
+            bnd_limits (_type_): _description_
+            bnd_type (_type_): _description_
+        """
         self.xx = xx
         self.dx = xx[1]-xx[0]
         self.species = []
@@ -70,10 +122,46 @@ class Multispecies:
         self.bnd_type = bnd_type
     
     def add_species(self,name,u0,rho0,Pg0,gamma, m = 1, cq = 0, cL =0, cD = 0, d = 0, molecule = "h"):
+        """Set the initial conditions for the state of the species, creates the species object and adds it to the simulation,
+
+        Args:
+            name (str): The name of the species
+            u0 (array): Initial velocity
+            rho0 (array): Initial density
+            Pg0 (array): Initial gas pressure
+            gamma (float): specific heat ratio
+            m (int, optional): mass of one molecule in kg. Defaults to 1.
+            cD (int, optional): diffusive const. Defaults to 0.
+            cq (int, optional): diffusive const. Defaults to 0.
+            cL (int, optional): diffusive const. Defaults to 0.
+            d (int, optional): diameter in meters. Defaults to 0.
+            molecule (str, optional): Type of molecule for colisions. Defaults to "h".
+        """
+        
         new_species = Species(name,u0,rho0,Pg0,gamma, m = m, cq = cq, cL = cL, cD = cD, d = d, molecule="h")
         self.species.append(new_species)
 
     def run(self,Nt,cfl_cut = 0.98,t0=0, cs_dir = "../nm_lib/nm_lib/cross-sections",coupled = False, Q_col = True, col = True, NS = False, conservative = False, flux_algo="LF"):
+        """Runs the simulation with the parameters given
+
+        Args:
+            Nt (int): Number of timesteps
+            cfl_cut (float, optional): cfl cutoff. Defaults to 0.98.
+            t0 (int, optional): Initial time. Defaults to 0.
+            cs_dir (str, optional): Directory containing colision crossections. Defaults to "../nm_lib/nm_lib/cross-sections".
+            coupled (bool, optional): Whether the species are coupled or not. Defaults to False.
+            Q_col (bool, optional): Enables the Q_col term in the energy equation. Defaults to True.
+            col (bool, optional): Enables the colision term in the continuity equation. Defaults to True.
+            NS (bool, optional): Enables Navier Stokes terms, not implemented. Defaults to False.
+            conservative (bool, optional): Enables conservative methods. Defaults to False.
+            flux_algo (str, optional): The fluc conservation algorithm. Defaults to "LF".
+
+        Returns:
+            t (array): time array
+            xx (array): spacial axis
+            values (list(array)): values from the get_values method for each species combined in a list
+        """
+
         self.Q_col = Q_col
         self.col = col
         self.coupled = coupled
@@ -133,6 +221,19 @@ class Multispecies:
 
 
     def init_V_col(self,V_const):
+        """Initialize matrix for colision frequency for each species combination
+
+               s1   |   s2   |   s3
+        s1  | V_11  |  V_12  |  V_13
+        s2  | V_21  |  V_22  |  V_23
+        s3  | V_31  |  V_32  |  V_33
+
+        Args:
+            V_const (ndarray): Constant colision frequency
+
+        Returns:
+            V_mat (ndarray): Colision frequency matrix
+        """
         N = len(self.species)
         Nx = len(self.species[0].rho)
         V_mat = np.ones((N,N,Nx))
@@ -148,6 +249,17 @@ class Multispecies:
 
 
     def update_V_col_const(self):
+        """Update matrix for constant colision frequency for each species combination
+
+               s1   |   s2   |   s3
+        s1  | V_11  |  V_12  |  V_13
+        s2  | V_21  |  V_22  |  V_23
+        s3  | V_31  |  V_32  |  V_33
+
+        Args:
+            V_const (ndarray): Constant colision frequency
+        """
+
         N = len(self.species)
         for i in range(N):
             for j in range(N):
@@ -156,6 +268,17 @@ class Multispecies:
 
 
     def update_V_col(self):
+        """Update matrix for colision frequency for each species combination
+
+               s1   |   s2   |   s3
+        s1  | V_11  |  V_12  |  V_13
+        s2  | V_21  |  V_22  |  V_23
+        s3  | V_31  |  V_32  |  V_33
+
+        Args:
+            V_const (ndarray): Constant colision frequency
+        """
+
         N = len(self.species)
         for i in range(N):
             for j in range(N):
@@ -163,6 +286,11 @@ class Multispecies:
 
 
     def get_dt(self):
+        """Get delta t for the cfl condition without colisions
+
+        Returns:
+            dt (float): delta t
+        """
         dt = np.inf
         for s in self.species:
             if np.amin(s.Pg) < 0:
@@ -181,7 +309,13 @@ class Multispecies:
                     dt = dt_s
         return dt
 
+
     def get_dt_col(self):
+        """Adds colisions to the calculation of delta t by adding the colision term to the velocity.
+
+        Returns:
+            dt (float): delta t
+        """
         #print("init dt = ", self.dt)
         dt = np.inf
         for s in self.species:
@@ -194,6 +328,8 @@ class Multispecies:
         return dt*self.cfl_cut
 
     def update_dt_conservative(self):
+        """Update dt for the conservative schemes
+        """
         dt = np.inf
         for s in self.species:
             c = np.sqrt(s.gamma*s.Pg/s.rho)
@@ -203,6 +339,17 @@ class Multispecies:
         self.dt = dt*self.cfl_cut
 
     def init_crosssections(self, dir):
+        """Creates the crossection object matrix for each combination of species
+
+               s1    |   s2    |   s3
+        s1  | cs_11  |  cs_12  |  cs_13
+        s2  | cs_21  |  cs_22  |  cs_23
+        s3  | cs_31  |  cs_32  |  cs_33
+
+
+        Args:
+            dir (str): Path to where the crosssection data is located
+        """
         self.Nspecies = len(self.species)
         self.mat_cs = [[0] * self.Nspecies for i in range(self.Nspecies)]
         for i,sa in enumerate(self.species):
@@ -214,6 +361,8 @@ class Multispecies:
 
 
     def update_conservative(self):
+        """Move forward in time once with the flux conservative scheme
+        """
         
         self.update_dt_conservative()
         
@@ -259,6 +408,21 @@ class Multispecies:
         
 
     def flux_Roe(self,s,U0,u0,e0,rho0,Pg0):
+        """Calculate the interface fluxes with Roe's first order method.
+        There are some redundant input arguments but python is doing some weird pointer things
+        and not updating properly so it is left as is becuase it works now...
+
+        Args:
+            s (Species): species to calculate interface flux
+            U0 (array): old flux array
+            u0 (_type_): old velocity
+            e0 (_type_): old energy
+            rho0 (_type_): old density
+            Pg0 (_type_): old gas pressure
+
+        Returns:
+            dF (array): interface flux
+        """
         rho = U0[0]
         u = U0[1] / rho
         e = U0[2] / rho
@@ -325,6 +489,17 @@ class Multispecies:
 
     
     def func_flux(self,U,s):
+        """Calculates the flux for the column vector form of the conservative equations
+
+        dU/dt + nabla F(U) = S, where S = 0
+
+        Args:
+            U (column vector): vector with the conserved parameters [u,rho,e]
+            s (_type_): _description_
+
+        Returns:
+            flux (column vector): Flux F(U)
+        """
         rho = U[0]
         u = U[1] / rho
         e = U[2] / rho
@@ -337,6 +512,21 @@ class Multispecies:
 
 
     def flux_Lax_Wendroff(self,s,U0,u,e,rho,Pg):
+        """Calculate the interface fluxes with Lax-Wendroff method.
+        There are some redundant input arguments but python is doing some weird pointer things
+        and not updating properly so it is left as is becuase it works now...
+
+        Args:
+            s (Species): species to calculate interface flux
+            U0 (array): old flux array
+            u (_type_): old velocity
+            e (_type_): old energy
+            rho (_type_): old density
+            Pg (_type_): old gas pressure
+
+        Returns:
+            dF (array): interface flux
+        """
 
         flux_cont = np.array(rho*u)
         flux_mom = np.array(rho*u**2 + Pg)
@@ -376,6 +566,11 @@ class Multispecies:
         return dF
 
     def update_diffusive(self,NS=False):
+        """Move forward in time with non-conservative scheme i.e central difference
+
+        Args:
+            NS (bool, optional): Enables Navier Stokes Term, not implemented properly. Defaults to False.
+        """
 
         #Find common dt:
         
@@ -428,6 +623,14 @@ class Multispecies:
         self.t += self.dt
 
     def get_mu_dyn(self,s):
+        """Get dynamic viscocity for NS terms
+
+        Args:
+            s (Species): species to calculate for
+
+        Returns:
+            mu (array): dynamic viscosity
+        """
 
         l = self.k_b*s.T / (np.sqrt(2)*s.sigma*s.Pg)
         print("T = ",np.amax(s.T))
@@ -436,13 +639,35 @@ class Multispecies:
         print("mu = ",np.amax(np.abs(mu)))
         return mu
     
+
     def get_col(self, sa, sb,cs):
+        """The colision term in the continuity equation for species a between species a and b
+
+
+        Args:
+            sa (Species): species a
+            sb (Species): species b
+            cs (CrossSection): colision crossection object
+
+        Returns:
+            col (array): colision term
+        """
         col_freq = self.get_col_freq(sa,sb,cs)
         return sa.rho*col_freq*(sa.u-sb.u)
         #return sa.rho * self.get_col_freq(sa,sb)*(sa.u-sb.u)
 
 
     def get_col_freq(self, sa,sb,cs):
+        """Colision frequency between for species a between species a and b
+
+        Args:
+            sa (Species): species a
+            sb (Species): species b
+            cs (CrossSection): colision crossection object
+
+        Returns:
+            col_freq (array): colision frequency in space
+        """
 
         T_ab = (sa.m*sa.T + sb.m*sb.T) / (sa.m+sb.m)
         m_ab = (sa.m*sb.m)/(sa.m+sb.m)
@@ -466,6 +691,17 @@ class Multispecies:
 
 
     def get_Q_col(self, sa, sb, cs):
+        """The colision term in the energy equation for species a between species a and b
+
+
+        Args:
+            sa (Species): species a
+            sb (Species): species b
+            cs (CrossSection): colision crossection object
+
+        Returns:
+            Q_col (array): colision term
+        """
         v_ab = self.get_col_freq(sa,sb,cs)
         n_a = sa.rho/sa.m
         term1 = (n_a*sa.m*v_ab)/(sa.m+sb.m)
@@ -474,32 +710,4 @@ class Multispecies:
         return term1 * (term2+term3)
 
 
-    def update_uncoupled(self):
-
-        #Find common dt:
-        
-        dt = self.get_dt()
-        self.t += dt
-
-        for s in self.species:
-
-            [u,e,rho,Pg] = pad([s.u,s.e,s.rho,s.Pg],self.bnd_limits,self.bnd_type)
-
-            gamma = s.gamma
-
-            c = np.sqrt(gamma*Pg/rho) #Can't be zero because pressure/density can't be zero
-
-            u = step_momentum(self.xx,u,rho,Pg,dt,cq = s.cq, cL = s.cL, ddx=self.ddx) / rho
-            
-            for j in range(len(u)):
-                    if np.abs(u[j]) > np.abs(c[j]) and u[j] > 0:
-                        u[j] = c[j]
-                    elif np.abs(u[j]) > np.abs(c[j]) and u[j] < 0:
-                        u[j] = -c[j]
-
-            e = step_energy(self.xx,e,u,Pg,rho,dt,cq = s.cq, cL = s.cL, ddx=self.ddx)
-            rho = step_density(self.xx,u,rho,dt,ddx=self.ddx)
-            Pg = step_pressure(Pg,e,rho,u,gamma)
-
-
-            [s.u,s.e,s.rho,s.Pg] = unpad([u,e,rho,Pg],self.bnd_limits) 
+    
