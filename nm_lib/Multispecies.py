@@ -1,6 +1,4 @@
-from cmath import pi
-from re import I, T
-from colisions import CrossSection
+from .colisions import CrossSection
 import numpy as np
 from .hydro import step_density,step_momentum,step_momentum_NS,step_pressure,step_energy,pad,unpad
 
@@ -138,7 +136,7 @@ class Multispecies:
             molecule (str, optional): Type of molecule for colisions. Defaults to "h".
         """
         
-        new_species = Species(name,u0,rho0,Pg0,gamma, m = m, cq = cq, cL = cL, cD = cD, d = d, molecule="h")
+        new_species = Species(name,u0,rho0,Pg0,gamma, m = m, cq = cq, cL = cL, cD = cD, d = d, molecule=molecule)
         self.species.append(new_species)
 
     def run(self,Nt,cfl_cut = 0.98,t0=0, cs_dir = "../nm_lib/nm_lib/cross-sections",coupled = False, Q_col = True, col = True, NS = False, conservative = False, flux_algo="LF"):
@@ -354,8 +352,12 @@ class Multispecies:
         self.mat_cs = [[0] * self.Nspecies for i in range(self.Nspecies)]
         for i,sa in enumerate(self.species):
             for j,sb in enumerate(self.species):
-                cs = CrossSection(dir,sa.molecule,sb.molecule)
-                self.mat_cs[i][j] = cs
+                if i==j:
+                    cs = CrossSection(dir,sa.molecule,sb.molecule, self_col=True)
+                    self.mat_cs[i][j] = cs
+                else:
+                    cs = CrossSection(dir,sa.molecule,sb.molecule)
+                    self.mat_cs[i][j] = cs
 
 
 

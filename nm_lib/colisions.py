@@ -5,16 +5,21 @@ class CrossSection():
     """Reads the crossection data for two species and stores in ndarray for fast implementation
     """
 
-    def __init__(self,dir,species1,species2):
+    def __init__(self,dir,species1,species2, self_col = False):
         """Reads and stores the data
 
         Args:
             dir (str): path to data
             species1 (str): Name of species. Example "h" for hydrogen
             species2 (str): Name of species. Example "he" for hydrogen
+            self_col (str, optional): Whether it is colliding with itself. i.e should return 0
         """
-        self.name = f"{species1}-{species2}"
-        self.temp,self.sigma = self.get_cs_tempsigma(dir,species1,species2)
+        if self_col:
+            self.temp = np.linspace(0,1e5,100)
+            self.sigma = np.zeros(100)
+        else:
+            self.name = f"{species1}-{species2}"
+            self.temp,self.sigma = self.get_cs_tempsigma(dir,species1,species2)
 
     def get_sigma(self,T_ab):
         """Get the crossection by interpolation on the crossection data 
