@@ -1,6 +1,6 @@
 import importlib
 import numpy as np
-from nm_lib import nm_lib as nm
+import nm_lib as nm
 import matplotlib.pyplot as plt
 
  
