@@ -8,16 +8,12 @@ Created on Fri Jul 02 10:25:17 2021
 """
 
 # import builtin modules
-from cProfile import label
 from matplotlib.animation import FuncAnimation
 from IPython.display import HTML
 
 # import external public "common" modules
 import numpy as np
 import matplotlib.pyplot as plt 
-
-
-from pandas import array
 
 def animMult(uts,xx,lbls, styles, t,n_frames=100, nt = False, log_time = False,ylim = None):
     """

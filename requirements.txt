@@ -13,3 +13,4 @@ qtconsole @ file:///home/conda/feedstock_root/build_artifacts/qtconsole_15991475
 QtPy==1.9.0
 scipy @ file:///Users/runner/miniforge3/conda-bld/scipy_1604305025129/work
 sunpy @ file:///Users/runner/miniforge3/conda-bld/sunpy_1592165614464/work
+sodshock==0.1.9

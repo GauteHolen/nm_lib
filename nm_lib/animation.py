@@ -4,8 +4,6 @@ Animation tools
 """
 
 
-from cmd import IDENTCHARS
-from re import I
 from matplotlib.animation import FuncAnimation
 from IPython.display import HTML
 
