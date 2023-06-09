@@ -1190,7 +1190,7 @@ def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
 
         dt1 = cfl_cut * cfl_adv_burger(a,xx)
         dt2 = cfl_cut * cfl_adv_burger(b,xx)
-        dt = np.min([dt1,dt2])*0.5
+        dt = np.min([dt1,dt2])
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
         hh1_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
