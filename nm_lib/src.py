@@ -1109,10 +1109,10 @@ def ops_Lax_LL_Lie(xx, hh, nt, a, b, cfl_cut = 0.98,
         
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
-        hh1 = hh_avg1 - a*dt/dx * hh_avg2
+        hh1 = hh_avg1 - 0.5*a*dt/dx * hh_avg2
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1)
-        hh2 = hh_avg1 - b*dt2/dx * hh_avg2
+        hh2 = hh_avg1 - 0.5*b*dt2/dx * hh_avg2
 
         hh_new = hh2
 
@@ -1190,7 +1190,7 @@ def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
 
         dt1 = cfl_cut * cfl_adv_burger(a,xx)
         dt2 = cfl_cut * cfl_adv_burger(b,xx)
-        dt = np.min([dt1,dt2])
+        dt = np.min([dt1,dt2])*0.5
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
         hh1_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
@@ -1213,14 +1213,14 @@ def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
         hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
         uunt[i] = hh_new      
         hh = hh_new
-        tt[i] = tt[i-1] + dt2
+        tt[i] = tt[i-1] + dt
 
     return tt, uunt
 
 
 def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[0,1], **kwargs): 
+        bnd_type='wrap', bnd_limits=[2,2], **kwargs): 
     r"""
     Advance nt time-steps in time the burger eq for a being a and b 
     a fix constant or array. Solving two advective terms separately 
@@ -1266,6 +1266,91 @@ def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
         Spatial and time evolution of u^n_j for n = (0,nt), and where j represents
         all the elements of the domain. 
     """
+    tt = np.zeros(nt)
+    uunt = np.zeros((nt,xx.shape[0]))
+    uunt[0] = hh
+    dx = xx[1] - xx[0]
+
+    
+    
+    hhold = hh
+    for i in range(1,nt):
+        """
+
+        dt1 = cfl_cut * cfl_adv_burger(a,xx)
+        dt2 = cfl_cut * cfl_adv_burger(b,xx)
+        dt = np.min([dt1,dt2])
+    
+    
+        
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
+        hh1 = hh_avg1 - 0.5*a*dt/dx * hh_avg2
+
+        hh1 = np.pad(hh1[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+
+        
+        if i==1:
+            hh2, hhold, dt_old = hyman(xx,hh1,dt,a=b,cfl_cut=cfl_cut,fold=None, bnd_limits=bnd_limits, bnd_type=bnd_type) 
+        else:
+            hh2, hhold, dt_old = hyman(xx,hh1,dt,a=b,cfl_cut=cfl_cut,fold=hhold,dtold=dt_old, bnd_limits=bnd_limits, bnd_type=bnd_type) 
+        
+        hh2 = np.pad(hh2[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2)
+        hh_new = hh_avg1 - 0.5*a*dt/dx * hh_avg2
+       
+
+        hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+        uunt[i] = hh_new      
+        hh = hh_new
+        tt[i] = tt[i-1] + dt
+        
+
+        """
+    
+
+        dt1 = cfl_cut * cfl_adv_burger(a,xx)
+        dt2 = cfl_cut * cfl_adv_burger(b,xx)
+        dt = np.min([dt1,dt2])
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
+        hh1_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
+       
+         # full step
+        if i==1:
+            hh1_bar, hhold1, dt2 = hyman(xx,hh1_tilde,dt,b,fold=None,dtold=dt2) 
+        else:
+            hh1_bar, hhold1, dt2 = hyman(xx,hh2_tilde,dt,b,fold=hh,dtold=dt2) 
+                 
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_bar) 
+        hh1 = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1)
+        hh2_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
+       
+       #Full step
+        if i==1:
+            hh2_bar, hhold2, dt2 = hyman(xx,hh2_tilde,dt,b,fold=None,dtold=dt2) 
+        else:
+            hh2_bar, hhold2, dt2 = hyman(xx,hh2_tilde,dt,b,fold=hh,dtold=dt2) 
+
+        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2_bar) 
+        hh_new = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
+
+        hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+        uunt[i] = hh_new      
+        hh = hh_new
+        tt[i] = tt[i-1] + dt
+    
+
+
+
+    return tt, uunt
+        
+
+
 
 
 def step_diff_burgers(xx, hh, a=1, ddx = lambda x,y: deriv_cent(x, y), **kwargs): 
@@ -1742,7 +1827,7 @@ def hyman(xx, f, dth, a, fold=None, dtold=None,
         cfl_cut=0.8, ddx = lambda x,y: deriv_dnw(x, y), 
         bnd_type='wrap', bnd_limits=[0,1], **kwargs): 
 
-    dt, u1_temp = step_adv_burgers(xx, f, a, ddx=ddx)
+    u1_temp = a*ddx(xx,f)
 
     if (np.any(fold) == None):
         firstit=False
@@ -1766,7 +1851,7 @@ def hyman(xx, f, dth, a, fold=None, dtold=None,
             u1_c = f[bnd_limits[0]:]
         f = np.pad(u1_c, bnd_limits, bnd_type)
 
-        dt, u1_temp = step_adv_burgers(xx, f, a, cfl_cut, ddx=ddx)
+        u1_temp = a*ddx(xx,f)
 
         f = hyman_corr(f, fsav, u1_temp, c2)
 
