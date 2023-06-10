@@ -1128,7 +1128,7 @@ def ops_Lax_LL_Lie(xx, hh, nt, a, b, cfl_cut = 0.98,
 
 def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[0,1], second_order = False, **kwargs): 
+        bnd_type='wrap', bnd_limits=[0,1], second_order = True, **kwargs): 
     r"""
     Advance nt time-steps in time the burger eq for a being a and b 
     a fix constant or array. Solving two advective terms separately 
@@ -1192,25 +1192,15 @@ def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
             dt1 = cfl_cut * cfl_adv_burger(a,xx)
             dt2 = cfl_cut * cfl_adv_burger(b,xx)
             dt = np.min([dt1,dt2])
-            dt_half = dt*0.5
 
             hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
-            hh1_tilde = hh_avg1 - 0.5 * a*dt_half/dx * hh_avg2     # half step
+            hh1_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
         
             hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_tilde) 
-            hh1_bar = hh_avg1 - b*dt_half/dx * hh_avg2             # full step
+            hh1_bar = hh_avg1 - b*dt/dx * hh_avg2             # full step
 
             hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_bar) 
-            hh1 = hh_avg1 - 0.5 * a*dt_half/dx * hh_avg2           # half step
-
-            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1) 
-            hh1 = hh_avg1 - 0.5 * a*dt_half/dx * hh_avg2           # half step
-        
-            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1) 
-            hh2_bar = hh_avg1 - b*dt_half/dx * hh_avg2             # full step
-
-            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2_bar) 
-            hh_new = hh_avg1 - 0.5 * a*dt_half/dx * hh_avg2           # half step
+            hh_new = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
 
             hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
             uunt[i] = hh_new      
@@ -1224,19 +1214,13 @@ def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
             dt1 = cfl_cut * cfl_adv_burger(a,xx)
             dt2 = cfl_cut * cfl_adv_burger(b,xx)
             dt = np.min([dt1,dt2])
-            dt_half = dt*0.5
+
 
             hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
-            hh1_tilde = hh_avg1 - a*dt_half/dx * hh_avg2     # full step
+            hh1_tilde = hh_avg1 - a*dt/dx * hh_avg2     # full step
         
             hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_tilde) 
-            hh1 = hh_avg1 - b*dt_half/dx * hh_avg2             # full step
-
-            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1) 
-            hh2_tilde = hh_avg1 - a*dt_half/dx * hh_avg2             # full step
-
-            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2_tilde) 
-            hh_new = hh_avg1 -  b*dt_half/dx * hh_avg2           # half step
+            hh_new = hh_avg1 - b*dt/dx * hh_avg2             # full step
 
             hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
             uunt[i] = hh_new      
