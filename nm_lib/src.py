@@ -1128,7 +1128,7 @@ def ops_Lax_LL_Lie(xx, hh, nt, a, b, cfl_cut = 0.98,
 
 def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[0,1], **kwargs): 
+        bnd_type='wrap', bnd_limits=[0,1], second_order = False, **kwargs): 
     r"""
     Advance nt time-steps in time the burger eq for a being a and b 
     a fix constant or array. Solving two advective terms separately 
@@ -1184,41 +1184,72 @@ def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
     dx = xx[1] - xx[0]
 
     
+    if second_order:
+        for i in range(1,nt):
+            
+        #same subscripts as wikipedia Strang Splitting
 
-    for i in range(1,nt):
+            dt1 = cfl_cut * cfl_adv_burger(a,xx)
+            dt2 = cfl_cut * cfl_adv_burger(b,xx)
+            dt = np.min([dt1,dt2])
+            dt_half = dt*0.5
+
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
+            hh1_tilde = hh_avg1 - 0.5 * a*dt_half/dx * hh_avg2     # half step
         
-       #same subscripts as wikipedia Strang Splitting
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_tilde) 
+            hh1_bar = hh_avg1 - b*dt_half/dx * hh_avg2             # full step
 
-        dt1 = cfl_cut * cfl_adv_burger(a,xx)
-        dt2 = cfl_cut * cfl_adv_burger(b,xx)
-        dt = np.min([dt1,dt2])
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_bar) 
+            hh1 = hh_avg1 - 0.5 * a*dt_half/dx * hh_avg2           # half step
 
-        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
-        hh1_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
-       
-        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_tilde) 
-        hh1_bar = hh_avg1 - b*dt/dx * hh_avg2             # full step
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1) 
+            hh1 = hh_avg1 - 0.5 * a*dt_half/dx * hh_avg2           # half step
+        
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1) 
+            hh2_bar = hh_avg1 - b*dt_half/dx * hh_avg2             # full step
 
-        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_bar) 
-        hh1 = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
-       
-        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1) 
-        hh2_bar = hh_avg1 - b*dt/dx * hh_avg2             # full step
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2_bar) 
+            hh_new = hh_avg1 - 0.5 * a*dt_half/dx * hh_avg2           # half step
 
-        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2_bar) 
-        hh_new = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
+            hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+            uunt[i] = hh_new      
+            hh = hh_new
+            tt[i] = tt[i-1] + dt
+    else:
+        for i in range(1,nt):
+            
+        #same subscripts as wikipedia Strang Splitting
 
-        hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
-        uunt[i] = hh_new      
-        hh = hh_new
-        tt[i] = tt[i-1] + dt
+            dt1 = cfl_cut * cfl_adv_burger(a,xx)
+            dt2 = cfl_cut * cfl_adv_burger(b,xx)
+            dt = np.min([dt1,dt2])
+            dt_half = dt*0.5
+
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
+            hh1_tilde = hh_avg1 - a*dt_half/dx * hh_avg2     # full step
+        
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_tilde) 
+            hh1 = hh_avg1 - b*dt_half/dx * hh_avg2             # full step
+
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1) 
+            hh2_tilde = hh_avg1 - a*dt_half/dx * hh_avg2             # full step
+
+            hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2_tilde) 
+            hh_new = hh_avg1 -  b*dt_half/dx * hh_avg2           # half step
+
+            hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
+            uunt[i] = hh_new      
+            hh = hh_new
+            tt[i] = tt[i-1] + dt
+
 
     return tt, uunt
 
 
 def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98, 
         ddx = lambda x,y: deriv_dnw(x, y), 
-        bnd_type='wrap', bnd_limits=[2,2], **kwargs): 
+        bnd_type='wrap', bnd_limits=[4,4], **kwargs): 
     r"""
     Advance nt time-steps in time the burger eq for a being a and b 
     a fix constant or array. Solving two advective terms separately 
@@ -1264,6 +1295,9 @@ def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
         Spatial and time evolution of u^n_j for n = (0,nt), and where j represents
         all the elements of the domain. 
     """
+
+    print("LH OS method")
+
     tt = np.zeros(nt)
     uunt = np.zeros((nt,xx.shape[0]))
     uunt[0] = hh
@@ -1273,39 +1307,6 @@ def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
     
     hhold = hh
     for i in range(1,nt):
-        """
-
-        dt1 = cfl_cut * cfl_adv_burger(a,xx)
-        dt2 = cfl_cut * cfl_adv_burger(b,xx)
-        dt = np.min([dt1,dt2])
-    
-    
-        
-
-        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
-        hh1 = hh_avg1 - 0.5*a*dt/dx * hh_avg2
-
-        hh1 = np.pad(hh1[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
-
-        
-        if i==1:
-            hh2, hhold, dt_old = hyman(xx,hh1,dt,a=b,cfl_cut=cfl_cut,fold=None, bnd_limits=bnd_limits, bnd_type=bnd_type) 
-        else:
-            hh2, hhold, dt_old = hyman(xx,hh1,dt,a=b,cfl_cut=cfl_cut,fold=hhold,dtold=dt_old, bnd_limits=bnd_limits, bnd_type=bnd_type) 
-        
-        hh2 = np.pad(hh2[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
-
-        hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2)
-        hh_new = hh_avg1 - 0.5*a*dt/dx * hh_avg2
-       
-
-        hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
-        uunt[i] = hh_new      
-        hh = hh_new
-        tt[i] = tt[i-1] + dt
-        
-
-        """
     
 
         dt1 = cfl_cut * cfl_adv_burger(a,xx)
@@ -1314,12 +1315,16 @@ def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
         hh1_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
+
+        hh1_tilde = np.pad(hh1_tilde[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
        
          # full step
         if i==1:
-            hh1_bar, hhold1, dtold = hyman(xx,hh1_tilde,dt,b,fold=None)  
+            hh1_bar, hhold, dtold = hyman(xx,hh1_tilde,dt,b,fold=None, bnd_limits=bnd_limits, ddx=ddx,bnd_type=bnd_type)  
         else:
-            hh1_bar, hhold1, dtold = hyman(xx,hh1_tilde,dt,b,fold=hh,dtold=dtold) 
+            hh1_bar, hhold, dtold = hyman(xx,hh1_tilde,dt,b,fold=hhold,dtold=dtold, bnd_limits=bnd_limits, ddx=ddx,bnd_type=bnd_type) 
+
+        hh1_bar= np.pad(hh1_bar[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
                  
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_bar) 
