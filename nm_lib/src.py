@@ -1109,10 +1109,11 @@ def ops_Lax_LL_Lie(xx, hh, nt, a, b, cfl_cut = 0.98,
         
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
-        hh1 = hh_avg1 - 0.5*a*dt/dx * hh_avg2
+        hh1 = hh_avg1 - 0.5*a*dt/dx * hh_avg2 # JMS remove 0.5
+
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1)
-        hh2 = hh_avg1 - 0.5*b*dt2/dx * hh_avg2
+        hh2 = hh_avg1 - 0.5*b*dt2/dx * hh_avg2 # JMS this should be dt and not dt2 and remove 0.5
 
         hh_new = hh2
 
@@ -1201,6 +1202,7 @@ def ops_Lax_LL_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_bar) 
         hh1 = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
 
+        # JMS why twice? from 1205 to 1213 should be removed. 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1)
         hh2_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
        
@@ -1311,7 +1313,7 @@ def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
     
 
         dt1 = cfl_cut * cfl_adv_burger(a,xx)
-        dt2 = cfl_cut * cfl_adv_burger(b,xx)
+        dt2 = cfl_cut * cfl_adv_burger(b,xx) # JMS Danger, dt2 is also used as an input in dtold (and it should not be this one that is passed in)
         dt = np.min([dt1,dt2])
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh)
@@ -1319,7 +1321,7 @@ def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
        
          # full step
         if i==1:
-            hh1_bar, hhold1, dt2 = hyman(xx,hh1_tilde,dt,b,fold=None,dtold=dt2) 
+            hh1_bar, hhold1, dt2 = hyman(xx,hh1_tilde,dt,b,fold=None,dtold=dt2)  
         else:
             hh1_bar, hhold1, dt2 = hyman(xx,hh2_tilde,dt,b,fold=hh,dtold=dt2) 
                  
@@ -1327,6 +1329,7 @@ def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1_bar) 
         hh1 = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
 
+        #JMS Like in the LL_strang version, delete from here to 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh1)
         hh2_tilde = hh_avg1 - 0.5 * a*dt/dx * hh_avg2     # half step
        
@@ -1338,7 +1341,8 @@ def osp_Lax_LH_Strang(xx, hh, nt, a, b, cfl_cut = 0.98,
 
         hh_avg1, hh_avg2 = step_Lax_uadv_burgers(hh2_bar) 
         hh_new = hh_avg1 - 0.5 * a*dt/dx * hh_avg2           # half step
-
+        # JMS here. 
+        
         hh_new = np.pad(hh_new[bnd_limits[0]:-bnd_limits[1]],bnd_limits,bnd_type)
         uunt[i] = hh_new      
         hh = hh_new
